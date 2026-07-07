@@ -133,6 +133,34 @@
   .manual-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 28px;margin-top:10px}
   .manual-note{font-size:11.5px;color:var(--faint);margin-top:10px}
 
+  /* ── AI Insight ── */
+  .ai-wrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}
+  .ai-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .ai-controls .src{margin-left:auto;font-size:12px}
+  .ai-controls .src.err{color:var(--red)}
+  .ai-out{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:18px 22px;min-height:70px;font-size:13.5px;line-height:1.75}
+  .ai-out.placeholder{color:var(--faint);display:flex;align-items:center;justify-content:center;text-align:center;padding:34px 22px}
+  .ai-out h3{font-size:15px;margin:18px 0 8px;color:var(--txt);border-left:3px solid var(--blue);padding-left:10px}
+  .ai-out h3:first-child{margin-top:0}
+  .ai-out h4{font-size:13.5px;margin:14px 0 6px;color:var(--blue)}
+  .ai-out p{margin:8px 0}
+  .ai-out ul{margin:8px 0;padding-left:20px}
+  .ai-out li{margin:5px 0}
+  .ai-out strong{color:var(--txt);font-weight:600}
+  .ai-out code{font-family:'IBM Plex Mono',monospace;background:var(--panel);padding:1px 5px;border-radius:4px;font-size:12px}
+  .ai-out .ai-meta{font-size:11px;color:var(--faint);border-top:1px solid var(--line);margin-top:18px;padding-top:10px}
+  .ai-news{margin-top:14px}
+  .ai-news h4{font-size:12.5px;color:var(--muted);margin-bottom:8px;font-weight:600}
+  .ai-news a{display:block;color:var(--txt);text-decoration:none;font-size:12.5px;padding:7px 11px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--panel2)}
+  .ai-news a:hover{border-color:var(--blue)}
+  .ai-news a .n-src{color:var(--faint);font-size:11px}
+  .ai-protocol textarea{width:100%;min-height:170px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:12px;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;resize:vertical}
+  .ai-protocol textarea:focus{outline:none;border-color:var(--blue)}
+  .ai-protocol .full-input{width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:7px 10px;font-family:'IBM Plex Mono',monospace;font-size:12px}
+  .ai-protocol .full-input:focus{outline:none;border-color:var(--blue)}
+  .ai-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:aispin .7s linear infinite;vertical-align:-1px;margin-right:4px}
+  @keyframes aispin{to{transform:rotate(360deg)}}
+
   footer{margin-top:36px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint)}
 
   @media (max-width:980px){
@@ -152,14 +180,18 @@
 
   <header>
     <h1>AI PRODUCTIVITY INVESTMENT DASHBOARD
-      <span class="sub">생산성 증가 → 이익 증가 → 주가 상승 → 장기 복리 · 유동원식 판단 프레임</span>
+      <span class="sub">생산성 증가 → 이익 증가 → 주가 상승 → 장기 복리 · 판단 프레임</span>
     </h1>
     <div class="hd-right">
       <div class="keybox">
         <input id="fredKey" type="password" placeholder="FRED API Key (선택)" autocomplete="off">
         <input id="ecosKey" type="password" placeholder="ECOS 인증키 (한국 지표)" autocomplete="off">
+        <input id="gnewsKey" type="password" placeholder="GNews API Key (뉴스)" autocomplete="off">
+        <input id="geminiKey" type="password" placeholder="Gemini API Key (AI Insight)" autocomplete="off">
         <a class="keyhint" href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noopener">FRED 키 발급 ↗</a>
         <a class="keyhint" href="https://ecos.bok.or.kr/api/" target="_blank" rel="noopener">ECOS 키 발급 ↗</a>
+        <a class="keyhint" href="https://gnews.io/" target="_blank" rel="noopener">GNews 키 발급 ↗</a>
+        <a class="keyhint" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Gemini 키 발급 ↗</a>
       </div>
       <div class="keybtns">
         <button class="btn primary" id="btnLoad">자동 데이터 불러오기</button>
@@ -218,6 +250,38 @@
       <div class="eq-weight" id="lastUpdated"></div>
     </div>
   </div>
+
+  <!-- AI Insight -->
+  <section id="aiSection">
+    <h2>AI Insight <small>대시보드 스냅샷 + GNews 뉴스 + 분석 프로토콜 → Gemini 종합 판단</small></h2>
+    <div class="ai-wrap">
+      <div class="ai-controls">
+        <button class="btn primary" id="btnAiRun">AI 분석 실행</button>
+        <button class="btn" id="btnAiNews" title="Gemini 없이 뉴스만 새로 수집">뉴스만 수집</button>
+        <span class="src" id="aiStatus"></span>
+      </div>
+      <div class="ai-out placeholder" id="aiOut">「AI 분석 실행」을 누르면 현재 대시보드 상태를 자동 스냅샷하고, GNews 최신 뉴스를 수집한 뒤, 분석 프로토콜과 함께 Gemini에 전달해 종합 판단을 생성합니다. (GNews·Gemini API Key는 우측 상단에 입력)</div>
+      <div class="ai-news" id="aiNews"></div>
+      <details class="ai-protocol manual" id="protocolPanel" style="margin-top:14px">
+        <summary>분석 프로토콜 · 뉴스 검색어 · Gemini 모델 설정 <span class="src">(Gemini에 전달되는 지시문 — 편집 시 저장)</span></summary>
+        <div class="manual-body">
+          <div class="manual-grid" style="margin-top:12px">
+            <div class="field"><label>Gemini 모델</label>
+              <input type="text" id="geminiModel" value="gemini-2.5-flash" style="width:180px"></div>
+          </div>
+          <label class="src" style="display:block;margin:12px 0 6px">뉴스 검색어 (GNews · 영어 권장)</label>
+          <input type="text" id="newsQuery" class="full-input">
+          <label class="src" style="display:block;margin:14px 0 6px">분석 프로토콜 (Gemini 시스템 지시문)</label>
+          <textarea id="aiProtocol" spellcheck="false"></textarea>
+          <div class="manual-note">
+            프로토콜·검색어·모델은 이 브라우저(localStorage)에만 저장됩니다.
+            Gemini에는 <b>[분석 프로토콜 + 대시보드 스냅샷 + 최근 뉴스]</b>가 하나의 프롬프트로 전달됩니다.
+            뉴스 수집은 GNews Key, 분석은 Gemini Key가 필요합니다 (둘 다 우측 상단 입력).
+          </div>
+        </div>
+      </details>
+    </div>
+  </section>
 
   <!-- 프레임워크 카드 -->
   <section>
@@ -307,7 +371,7 @@
   </section>
 
   <footer>
-    데이터: FRED fredgraph.csv (금리·물가·생산성·부채·침체확률·VIX) · Yahoo Finance (XLK/SOXX/S&P500/KOSPI) — 브라우저 직접 수집(공개 CORS 프록시 경유) · 수동 입력 (EPS 컨센서스, Hyperscaler CAPEX, HBM, 주주환원)<br>
+    데이터: FRED fredgraph.csv (금리·물가·생산성·미국+한국 가계부채/GDP·한국 기업부채/GDP[BIS신용÷명목GDP 계산]·침체확률·VIX) · Yahoo Finance (XLK/SOXX/S&P500/KOSPI, XLK 200일선으로 추세 신호 자동화) · ECOS (한국 기준금리·국고채·CPI) — 브라우저 직접 수집(공개 CORS 프록시 경유) · 수동 입력 (Nasdaq/KOSPI EPS 컨센서스, Hyperscaler CAPEX, HBM 수요 — 무료 API 없음)<br>
     본 대시보드는 투자 판단 보조 도구이며 특정 종목의 매수·매도 권유가 아닙니다. Framework: 생산성 → 이익 → 주가 → 장기 복리.
   </footer>
 </div>
@@ -345,7 +409,7 @@ const IND = [
     rule:"< 75 / 75~90 / > 90",
     level:v=> v<75 ? "bull" : v<=90 ? "neutral" : "bear" },
   { key:"krHouseholdDebt", cat:"Debt", name:"한국 가계부채/GDP", unit:"%", weight:6,
-    auto:null, manualDefault:90, fw:"debt",
+    auto:d=>d?.fred?.krHouseholdDebt?.value, manualDefault:90, fw:"debt",
     rule:"< 75 / 75~90 / > 90",
     level:v=> v<75 ? "bull" : v<=90 ? "neutral" : "bear" },
   { key:"krBaseRate", cat:"Korea", name:"한국 기준금리 (ECOS)", unit:"%", weight:0,
@@ -360,8 +424,17 @@ const IND = [
     auto:d=>d?.ecos?.krCpi?.value, manualDefault:2.3, fw:"rates",
     rule:"1.5~2.5 / 나머지 / > 3.5",
     level:v=> (v>=1.5&&v<=2.5) ? "bull" : v>3.5 ? "bear" : "neutral" },
-  { key:"corpDebt", cat:"Debt", name:"기업부채/GDP", unit:"%", weight:6,
-    auto:null, manualDefault:118, fw:"debt",
+  { key:"corpDebt", cat:"Debt", name:"한국 기업부채/GDP", unit:"%", weight:6,
+    // 한국 비금융기업 신용(원) ÷ 최근 4분기 명목GDP(원) × 100 · 단위오류는 30~200% 범위검증으로 자동 차단→수동 폴백
+    auto:d=>{
+      const c = d?.fred?._krNfcCredit, g = d?.fred?._krNominalGdp;
+      if (!c || !Number.isFinite(c.value) || !g?.history?.length) return NaN;
+      const q = g.history.slice(-4).map(p=>p.v).filter(Number.isFinite);
+      const annual = q.length===4 ? q.reduce((a,b)=>a+b,0) : (Number.isFinite(g.value) ? g.value*4 : NaN);
+      if (!Number.isFinite(annual) || annual<=0) return NaN;
+      const ratio = c.value / annual * 100;
+      return (ratio>=30 && ratio<=200) ? +ratio.toFixed(1) : NaN;
+    }, manualDefault:118, fw:"debt",
     rule:"< 100 / 100~130 / > 130",
     level:v=> v<100 ? "bull" : v<=130 ? "neutral" : "bear" },
   { key:"nasdaqEps", cat:"Earnings", name:"Nasdaq EPS 증가율", unit:"%", weight:10,
@@ -388,9 +461,15 @@ const IND = [
     auto:null, manualDefault:3, fw:"shareholder",
     rule:"≥ 3 / 1~3 / < 1",
     level:v=> v>=3 ? "bull" : v>=1 ? "neutral" : "bear" },
-  { key:"technical", cat:"기술적", name:"추세 신호 (컵앤핸들 등)", unit:"", weight:3,
-    auto:null, manualDefault:1, fw:"shareholder",
-    rule:"1 긍정 / 0 중립 / -1 부정",
+  { key:"technical", cat:"기술적", name:"추세 신호 (XLK 200일선)", unit:"", weight:3,
+    // XLK 종가 vs 200일 이동평균 · +2% 초과=긍정(1) / -2% 미만=부정(-1) / 근접=중립(0)
+    auto:d=>{
+      const x = d?.market?.xlk;
+      if (!x || !Number.isFinite(x.ma200) || !Number.isFinite(x.price) || x.ma200<=0) return NaN;
+      const dev = x.price / x.ma200 - 1;
+      return dev > 0.02 ? 1 : dev < -0.02 ? -1 : 0;
+    }, manualDefault:1, fw:"shareholder",
+    rule:"종가 > 200일선+2% / ±2% / < 200일선-2%",
     level:v=> v>=1 ? "bull" : v<=-1 ? "bear" : "neutral" },
 ];
 const LEVEL_PTS = { bull:100, neutral:60, bear:20 };
@@ -751,6 +830,10 @@ const FRED_SERIES = {
   recessionProb:  { id:"RECPROUSM156N", type:"level", lookbackMonths:18, history:false, label:"경기침체 확률 (%)" },
   productivity:   { id:"OPHNFB",        type:"yoy",   lookbackMonths:40, history:false, label:"미국 노동생산성 YoY (%)" },
   usHouseholdDebt:{ id:"HDTGPDUSQ163N", type:"level", lookbackMonths:30, history:false, label:"미국 가계부채/GDP (%)" },
+  krHouseholdDebt:{ id:"HDTGPDKRQ163N", type:"level", lookbackMonths:36, history:false, label:"한국 가계부채/GDP (%)" },
+  // ↓ corpDebt(한국 기업부채/GDP) 계산용 원자재 — IND 표에는 직접 노출 안 됨(언더스코어 접두)
+  _krNfcCredit:   { id:"CRDQKRANABIS",  type:"level", lookbackMonths:30, history:false, label:"한국 비금융기업 신용 (원 십억)" },
+  _krNominalGdp:  { id:"NGDPSAXDCKRQ",  type:"level", lookbackMonths:30, history:true,  label:"한국 명목 GDP (원, 분기)" },
 };
 const MARKET_SYMBOLS = {
   xlk:   { symbol:"XLK",   label:"XLK (미국 IT)" },
@@ -887,9 +970,13 @@ async function fetchYahooSymbol(cfg){
 
   const last = points[points.length-1], first = points[0];
   const step = Math.max(1, Math.floor(points.length / 52));
+  // 200일 이동평균 (원본 일별 종가 기준 · 데이터가 부족하면 있는 만큼)
+  const nMa = Math.min(200, points.length);
+  const ma200 = points.slice(-nMa).reduce((a,p)=>a+p.v, 0) / nMa;
   return {
     label:cfg.label, symbol:cfg.symbol, price:last.v, asOf:last.d,
     return1y:+(((last.v/first.v)-1)*100).toFixed(2),
+    ma200:+ma200.toFixed(2),
     history: points.filter((_,i)=> i%step===0 || i===points.length-1),
   };
 }
@@ -1005,6 +1092,196 @@ document.getElementById("btnFresh").addEventListener("click", () => loadData(tru
 ["rimName","rimPrice","rimBps","rimRf","rimG","roeWorst","roeLikely","roeBull"].forEach(id =>
   document.getElementById(id).addEventListener("input", render));
 
+/* ═══════════════════════════════════════════════
+   8. AI Insight — 자동 스냅샷 + GNews 뉴스 + Gemini 종합 분석
+   - 스냅샷: 현재 evaluate() 결과를 텍스트로 직렬화
+   - GNews: gnews.io v4 검색 (CORS 차단 시 공개 프록시 폴백)
+   - Gemini: generativelanguage API 직접 POST (CORS 지원)
+   ═══════════════════════════════════════════════ */
+const DEFAULT_NEWS_QUERY = "AI semiconductor OR Nvidia OR HBM OR hyperscaler capex OR Fed interest rate OR Nasdaq earnings";
+const DEFAULT_PROTOCOL =
+`당신은 거시경제와 AI 반도체 투자 사이클을 분석하는 장기투자 애널리스트입니다.
+아래 [대시보드 스냅샷]은 규칙 기반 스코어링 결과이고, [최근 뉴스]는 관련 최신 기사입니다.
+두 정보를 교차 검증하여 아래 프로토콜에 따라 한국어(마크다운)로 분석하세요.
+
+■ 답변 스타일
+- 항상 "왜"를 설명한다.
+- 다음 순서로 작성한다 (각 항목을 마크다운 소제목 ##로):
+  1. 결론
+  2. 생산성 분석
+  3. 거시경제
+  4. 기업이익
+  5. 밸류에이션
+  6. AI 사이클 위치
+  7. 리스크
+  8. 장기 전망
+- 반드시 숫자·통계·복리·이익 증가율·ROE·PER·Risk Premium 등을 활용한다.
+  (대시보드 스냅샷의 지표값과 RIM 결과를 명시적으로 인용할 것)
+
+■ 투자 원칙
+- 좋은 기업은 오래 보유한다.
+- 단기 뉴스보다 기업 이익을 믿는다.
+- 시장보다 생산성을 믿는다.
+- 복리 효과를 가장 중요하게 생각한다.
+- 기업이익 증가율이 주가상승률보다 높으면 장기적으로 추가 상승 가능성이 높다고 판단한다.
+
+■ 반드시 지켜야 하는 원칙
+- 예측을 사실처럼 단정하지 않는다.
+- AI 사이클·목표지수·목표주가 등은 항상 '가능한 시나리오', '현재 데이터 기준의 판단'으로 표현한다.
+- 불확실성과 반대 시나리오도 함께 설명한다.
+- 특정 종목의 매수·매도 권유를 단정적으로 하지 말고, 데이터와 투자 판단 근거를 중심으로 설명한다.`;
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+// 현재 대시보드 상태를 텍스트 스냅샷으로 직렬화
+function buildSnapshot(){
+  const r = evaluate();
+  const L = [];
+  L.push(`# AI 생산성 투자 대시보드 스냅샷 (${new Date().toLocaleString("ko-KR")})`);
+  L.push(`- 종합 점수: ${r.score.toFixed(1)}/100 → 결정: ${r.decision} (권장 주식비중 ${r.eq})`);
+  if (apiData) L.push(`- 자동 데이터 갱신: ${new Date(apiData.updated).toLocaleString("ko-KR")}`);
+  L.push(``, `## 프레임워크 상태 (8개 영역)`);
+  r.fw.forEach(f => L.push(`- ${f.name}: ${f.status.toUpperCase()} → ${f.action}${f.detail?` (${f.detail})`:""}`));
+  L.push(``, `## 지표 상세`);
+  r.rows.forEach(x => L.push(`- [${x.cat}] ${x.name}: ${fmt(x.value, x.unit)} · 신호 ${x.lv.toUpperCase()} · 가중치 ${x.weight} · 소스 ${x.source}`));
+  L.push(``, `## RIM 밸류에이션 (${r.rim.name} · 현재가 ${r.rim.price.toFixed(0)})`);
+  r.rim.scenarios.forEach(sc => {
+    const up = sc.upside * 100;
+    L.push(`- ${sc.tag}: 적정가 ${Number.isFinite(sc.avgFv)?sc.avgFv.toFixed(0):"–"} (${Number.isFinite(up)?(up>=0?"+":"")+up.toFixed(1)+"%":"–"})`);
+  });
+  L.push(``, `## AI 투자 사이클 위치`);
+  L.push(CYCLE.map(([nm,st])=>`${nm}(${CYCLE_LABEL[st]})`).join(" · "));
+  return L.join("\n");
+}
+
+// GNews v4 검색 — 직접 fetch 후 CORS 실패 시 프록시 폴백
+async function fetchNews(query, key){
+  const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=en&max=10&sortby=publishedAt&apikey=${encodeURIComponent(key)}`;
+  let txt;
+  try{
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    txt = await res.text();
+    if (!res.ok && !txt.trim().startsWith("{")) throw new Error("direct fail");
+  }catch(e){
+    txt = await fetchViaProxy(url);   // 브라우저 CORS 차단 시 공개 프록시 경유
+  }
+  const data = JSON.parse(txt);
+  if (data.errors) throw new Error(Array.isArray(data.errors) ? data.errors.join(", ") : String(data.errors));
+  return (data.articles || []).map(a => ({
+    title: a.title, source: a.source?.name || "", url: a.url,
+    publishedAt: a.publishedAt || "", description: a.description || "",
+  }));
+}
+
+function renderNews(articles){
+  const box = document.getElementById("aiNews");
+  if (!articles || !articles.length){ box.innerHTML = ""; return; }
+  box.innerHTML = `<h4>수집 뉴스 ${articles.length}건 · GNews</h4>` + articles.map(a =>
+    `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)} <span class="n-src">— ${esc(a.source)} · ${esc(a.publishedAt.slice(0,10))}</span></a>`).join("");
+}
+
+// Gemini generateContent — CORS 지원되므로 직접 POST
+async function callGemini(prompt, key, model){
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  const data = await res.json().catch(()=>({}));
+  if (data.error) throw new Error(data.error.message || `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).filter(Boolean).join("") || "";
+  if (!text) throw new Error("빈 응답 (안전 필터 차단 또는 모델명 확인 필요)");
+  return text;
+}
+
+// 최소 마크다운 → HTML (##/###/**bold**/`code`/리스트)
+function mdToHtml(md){
+  const lines = esc(md).split(/\r?\n/);
+  const inline = s => s.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/`([^`]+?)`/g,"<code>$1</code>");
+  let html = "", inList = false;
+  for (const raw of lines){
+    const line = raw.trim();
+    const li = line.match(/^[-*]\s+(.*)/);
+    if (li){ if(!inList){ html += "<ul>"; inList = true; } html += `<li>${inline(li[1])}</li>`; continue; }
+    if (inList){ html += "</ul>"; inList = false; }
+    if (/^###\s+/.test(line))      html += `<h4>${inline(line.replace(/^###\s+/,""))}</h4>`;
+    else if (/^##\s+/.test(line))  html += `<h3>${inline(line.replace(/^##\s+/,""))}</h3>`;
+    else if (/^#\s+/.test(line))   html += `<h3>${inline(line.replace(/^#\s+/,""))}</h3>`;
+    else if (line !== "")          html += `<p>${inline(line)}</p>`;
+  }
+  if (inList) html += "</ul>";
+  return html;
+}
+
+let aiBusy = false;
+async function runAiInsight(newsOnly){
+  if (aiBusy) return;
+  const stEl = document.getElementById("aiStatus");
+  const out  = document.getElementById("aiOut");
+  const gnewsKey  = document.getElementById("gnewsKey").value.trim();
+  const geminiKey = document.getElementById("geminiKey").value.trim();
+  const model = (document.getElementById("geminiModel").value || "gemini-2.5-flash").trim();
+  const query = (document.getElementById("newsQuery").value || DEFAULT_NEWS_QUERY).trim();
+  const protocol = document.getElementById("aiProtocol").value || DEFAULT_PROTOCOL;
+
+  aiBusy = true; stEl.className = "src";
+  try{
+    // 1) 뉴스 수집
+    let articles = [];
+    if (gnewsKey){
+      stEl.innerHTML = `<span class="ai-spin"></span>뉴스 수집 중…`;
+      try{ articles = await fetchNews(query, gnewsKey); renderNews(articles); }
+      catch(e){
+        stEl.className = "src err"; stEl.textContent = "뉴스 수집 실패: " + e.message;
+        if (newsOnly){ aiBusy = false; return; }
+      }
+    } else {
+      renderNews([]);
+      if (newsOnly){ stEl.className = "src err"; stEl.textContent = "GNews API Key를 입력하세요 (우측 상단)."; aiBusy = false; return; }
+    }
+    if (newsOnly){ stEl.className = "src"; stEl.textContent = `뉴스 ${articles.length}건 수집 완료`; aiBusy = false; return; }
+
+    // 2) Gemini 분석
+    if (!geminiKey){ stEl.className = "src err"; stEl.textContent = "Gemini API Key를 입력하세요 (우측 상단)."; aiBusy = false; return; }
+    const snapshot = buildSnapshot();
+    const newsBlock = articles.length
+      ? articles.map((a,i)=>`${i+1}. ${a.title} (${a.source}, ${a.publishedAt.slice(0,10)})\n   ${a.description}`).join("\n")
+      : "(뉴스 없음 — GNews 키 미입력 또는 수집 실패)";
+    const prompt = `${protocol}\n\n===== [대시보드 스냅샷] =====\n${snapshot}\n\n===== [최근 뉴스] =====\n${newsBlock}`;
+
+    stEl.innerHTML = `<span class="ai-spin"></span>Gemini 분석 중…`;
+    const answer = await callGemini(prompt, geminiKey, model);
+    out.className = "ai-out";
+    out.innerHTML = mdToHtml(answer) +
+      `<div class="ai-meta">모델 ${esc(model)} · 뉴스 ${articles.length}건 반영 · 생성 ${new Date().toLocaleString("ko-KR")}</div>`;
+    stEl.className = "src"; stEl.textContent = "분석 완료";
+  }catch(e){
+    stEl.className = "src err"; stEl.textContent = "분석 실패: " + e.message;
+  }finally{ aiBusy = false; }
+}
+
+document.getElementById("btnAiRun").addEventListener("click", () => runAiInsight(false));
+document.getElementById("btnAiNews").addEventListener("click", () => runAiInsight(true));
+
+// 키·프로토콜·검색어·모델 저장 + key-set 표시
+function bindAiPersist(id, storeKey, keySet){
+  const el = document.getElementById(id);
+  el.addEventListener("input", () => {
+    store(storeKey, el.value);
+    if (keySet) el.classList.toggle("key-set", !!el.value.trim());
+  });
+}
+bindAiPersist("gnewsKey",   "aiDash.gnewsKey",  true);
+bindAiPersist("geminiKey",  "aiDash.geminiKey", true);
+bindAiPersist("geminiModel","aiDash.geminiModel", false);
+bindAiPersist("newsQuery",  "aiDash.newsQuery", false);
+bindAiPersist("aiProtocol", "aiDash.protocol",  false);
+
 /* ── 초기화: 저장된 키 복원 → 수동값으로 그린 뒤 자동 데이터 로드 ── */
 initManual();
 buildManualPanel();
@@ -1012,6 +1289,19 @@ const savedFred = load("aiDash.fredKey");
 const savedEcos = load("aiDash.ecosKey");
 if (savedFred){ document.getElementById("fredKey").value = savedFred; document.getElementById("fredKey").classList.add("key-set"); }
 if (savedEcos){ document.getElementById("ecosKey").value = savedEcos; document.getElementById("ecosKey").classList.add("key-set"); }
+
+// AI Insight 복원 (키는 password → key-set 표시, 프로토콜/검색어는 기본값 채움)
+const savedGnews  = load("aiDash.gnewsKey");
+const savedGemini = load("aiDash.geminiKey");
+const savedModel  = load("aiDash.geminiModel");
+const savedQuery  = load("aiDash.newsQuery");
+const savedProto  = load("aiDash.protocol");
+if (savedGnews){ document.getElementById("gnewsKey").value = savedGnews; document.getElementById("gnewsKey").classList.add("key-set"); }
+if (savedGemini){ document.getElementById("geminiKey").value = savedGemini; document.getElementById("geminiKey").classList.add("key-set"); }
+if (savedModel) document.getElementById("geminiModel").value = savedModel;
+document.getElementById("newsQuery").value = savedQuery || DEFAULT_NEWS_QUERY;
+document.getElementById("aiProtocol").value = savedProto || DEFAULT_PROTOCOL;
+
 render();
 loadData(false);
 </script>
