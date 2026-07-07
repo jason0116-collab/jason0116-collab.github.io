@@ -160,6 +160,22 @@
   .ai-protocol .full-input:focus{outline:none;border-color:var(--blue)}
   .ai-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:aispin .7s linear infinite;vertical-align:-1px;margin-right:4px}
   @keyframes aispin{to{transform:rotate(360deg)}}
+  /* AI 추정 지표 */
+  .ai-estimates{margin-top:14px}
+  .ai-estimates h4{font-size:12.5px;color:var(--muted);margin-bottom:8px;font-weight:600}
+  .est-card{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:8px}
+  .est-card .est-name{font-size:12.5px;color:var(--txt);font-weight:600;min-width:130px}
+  .est-card .est-val{font-size:19px;font-weight:600;font-family:'IBM Plex Mono',monospace}
+  .est-conf{font-size:10.5px;padding:2px 9px;border-radius:20px;font-weight:600}
+  .est-conf.high{color:var(--green);background:var(--green-bg)}
+  .est-conf.medium{color:var(--yellow);background:var(--yellow-bg)}
+  .est-conf.low,.est-conf.none{color:var(--faint);background:rgba(90,100,128,.18)}
+  .est-apply{margin-left:auto;font-size:12px;padding:5px 12px}
+  .est-apply:disabled{opacity:.4;cursor:not-allowed}
+  .est-basis{flex:1 1 100%;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .est-basis a{color:var(--blue);text-decoration:none}
+  .est-applied{color:#C084FC;font-size:11px;font-weight:600}
+  .src.ai{color:#C084FC}
 
   footer{margin-top:36px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint)}
 
@@ -261,6 +277,7 @@
         <span class="src" id="aiStatus"></span>
       </div>
       <div class="ai-out placeholder" id="aiOut">「AI 분석 실행」을 누르면 현재 대시보드 상태를 자동 스냅샷하고, GNews 최신 뉴스를 수집한 뒤, 분석 프로토콜과 함께 Gemini에 전달해 종합 판단을 생성합니다. (GNews·Gemini API Key는 우측 상단에 입력)</div>
+      <div class="ai-estimates" id="aiEstimates"></div>
       <div class="ai-news" id="aiNews"></div>
       <details class="ai-protocol manual" id="protocolPanel" style="margin-top:14px">
         <summary>분석 프로토콜 · 뉴스 검색어 · Gemini 모델 설정 <span class="src">(Gemini에 전달되는 지시문 — 편집 시 저장)</span></summary>
@@ -497,6 +514,7 @@ const CYCLE_LABEL = { now:"NOW", entering:"ENTERING", next:"NEXT", future:"FUTUR
 let apiData = null;           // Worker 응답
 let manual = {};              // 수동 입력값
 let charts = {};
+let aiEstimated = {};          // 뉴스AI추정으로 적용된 지표 키 (localStorage 복원)
 
 function store(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
 function load(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
@@ -562,7 +580,7 @@ function evaluate(){
       if (Number.isFinite(v)) { value = v; source = "자동"; }
       else { value = manual[ind.key]; source = "수동(대체)"; }
     } else {
-      value = manual[ind.key]; source = "수동";
+      value = manual[ind.key]; source = aiEstimated[ind.key] ? "뉴스AI추정" : "수동";
     }
     const lv = ind.level(value);
     const pts = LEVEL_PTS[lv];
@@ -656,7 +674,7 @@ function render(){
       <td><span class="lv ${x.lv}">${x.lv==="bull"?"Bull":x.lv==="neutral"?"Neutral":"Bear"}</span></td>
       <td class="num mono">${x.weight}</td>
       <td class="num mono">${x.contrib.toFixed(1)}</td>
-      <td><span class="src ${x.source==="자동"?"auto":""}">${x.source}</span></td>
+      <td><span class="src ${x.source==="자동"?"auto":x.source==="뉴스AI추정"?"ai":""}">${x.source}</span></td>
     </tr>`).join("");
 
   // RIM
@@ -766,13 +784,19 @@ function buildManualPanel(){
   grid.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("input", () => {
       const v = parseFloat(inp.value);
-      if (Number.isFinite(v)){ manual[inp.dataset.key] = v; store("aiDash.manual", manual); render(); }
+      if (Number.isFinite(v)){
+        manual[inp.dataset.key] = v;
+        if (aiEstimated[inp.dataset.key]){ delete aiEstimated[inp.dataset.key]; store("aiDash.aiEstimated", aiEstimated); }
+        store("aiDash.manual", manual); render();
+      }
     });
   });
 }
 document.getElementById("btnReset").addEventListener("click", () => {
   IND.forEach(i => manual[i.key] = i.manualDefault);
+  aiEstimated = {};
   store("aiDash.manual", manual);
+  store("aiDash.aiEstimated", aiEstimated);
   buildManualPanel(); render();
 });
 
@@ -1218,6 +1242,86 @@ function mdToHtml(md){
   return html;
 }
 
+/* ── 뉴스 기반 AI 지표 추출 (참고용 추정치, 사람이 확인 후 적용) ── */
+const AI_EXTRACT = [
+  { key:"hbm", name:"HBM 수요 증가율", unit:"%",
+    ask:"HBM(고대역폭메모리)의 연간(YoY) 수요 증가율(%). 전체 시장의 물량/비트 수요 기준 우선, 없으면 시장규모(매출) 성장률. 특정 분기가 아닌 연간 기준." },
+];
+let lastEstimates = null;
+
+async function extractIndicators(articles, key, model){
+  const props = {};
+  AI_EXTRACT.forEach(e => {
+    props[e.key] = { type:"OBJECT", properties:{
+      value:{ type:"NUMBER" }, confidence:{ type:"STRING", enum:["high","medium","low","none"] },
+      basis:{ type:"STRING" }, source:{ type:"STRING" },
+    }, required:["value","confidence","basis","source"] };
+  });
+  const schema = { type:"OBJECT", properties:props, required:AI_EXTRACT.map(e=>e.key) };
+  const list = AI_EXTRACT.map(e=>`- ${e.key}: ${e.name} (${e.unit}) — ${e.ask}`).join("\n");
+  const newsBlock = articles.map((a,i)=>`${i+1}. ${a.title} (${a.source})\n   ${a.description}`).join("\n");
+  const prompt =
+`당신은 반도체 산업 애널리스트입니다. 아래 [뉴스]에서 다음 지표의 최신 추정치를 추출하세요.
+${list}
+
+규칙:
+- 뉴스에 명시적 수치 근거가 있을 때만 값을 채우세요. basis에는 근거가 된 문장/수치를, source에는 해당 기사 제목을 넣으세요.
+- 근거가 불충분하거나 추측이면 confidence를 "none", value는 0으로 두세요.
+- value는 % 숫자만(예: 45). 서술 금지.
+
+[뉴스]
+${newsBlock}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, {
+    method:"POST", headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ contents:[{ parts:[{ text:prompt }] }],
+      generationConfig:{ temperature:0.2, responseMimeType:"application/json", responseSchema:schema } }),
+    signal: AbortSignal.timeout(60000),
+  });
+  const data = await res.json().catch(()=>({}));
+  if (data.error) throw new Error(data.error.message || `HTTP ${res.status}`);
+  const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).filter(Boolean).join("") || "";
+  if (!text) throw new Error("빈 추출 응답");
+  return JSON.parse(text);
+}
+
+function renderEstimates(obj){
+  const box = document.getElementById("aiEstimates");
+  if (!obj){ box.innerHTML = ""; return; }
+  const cards = AI_EXTRACT.map(e => {
+    const r = obj[e.key] || {};
+    const conf = String(r.confidence || "none").toLowerCase();
+    const val = Number(r.value);
+    const canApply = Number.isFinite(val) && val !== 0 && (conf === "high" || conf === "medium");
+    const applied = !!aiEstimated[e.key];
+    const src = esc(r.source || "");
+    return `<div class="est-card">
+      <span class="est-name">${e.name}</span>
+      <span class="est-val">${Number.isFinite(val) ? val + e.unit : "–"}</span>
+      <span class="est-conf ${conf}">신뢰도 ${conf}</span>
+      ${applied
+        ? `<span class="est-applied">✓ 적용됨</span>`
+        : `<button class="btn est-apply" data-key="${e.key}" data-val="${Number.isFinite(val) ? val : ""}" ${canApply ? "" : "disabled"}>적용</button>`}
+      <span class="est-basis">${r.basis ? esc(r.basis) : "근거 없음"}${src ? ` <span class="src">— ${src}</span>` : ""}</span>
+    </div>`;
+  }).join("");
+  box.innerHTML = `<h4>AI 추정 지표 <span class="src" style="font-weight:400">뉴스 기반 · 참고용, 확인 후 [적용]</span></h4>${cards}`;
+  box.querySelectorAll(".est-apply").forEach(btn => btn.addEventListener("click", () => {
+    const v = parseFloat(btn.dataset.val);
+    if (Number.isFinite(v)) applyEstimate(btn.dataset.key, v);
+  }));
+}
+
+function applyEstimate(key, value){
+  manual[key] = value;
+  aiEstimated[key] = true;
+  store("aiDash.manual", manual);
+  store("aiDash.aiEstimated", aiEstimated);
+  buildManualPanel();
+  render();
+  renderEstimates(lastEstimates);
+}
+
 let aiBusy = false;
 async function runAiInsight(newsOnly){
   if (aiBusy) return;
@@ -1259,6 +1363,15 @@ async function runAiInsight(newsOnly){
     out.className = "ai-out";
     out.innerHTML = mdToHtml(answer) +
       `<div class="ai-meta">모델 ${esc(model)} · 뉴스 ${articles.length}건 반영 · 생성 ${new Date().toLocaleString("ko-KR")}</div>`;
+
+    // 3) 뉴스 기반 지표 추출 (HBM 등) — 뉴스가 있을 때만, 실패해도 본 분석은 유지
+    if (articles.length){
+      try{
+        stEl.innerHTML = `<span class="ai-spin"></span>지표 추출 중…`;
+        lastEstimates = await extractIndicators(articles, geminiKey, model);
+        renderEstimates(lastEstimates);
+      }catch(err){ console.warn("지표 추출 실패:", err); }
+    }
     stEl.className = "src"; stEl.textContent = "분석 완료";
   }catch(e){
     stEl.className = "src err"; stEl.textContent = "분석 실패: " + e.message;
@@ -1284,6 +1397,7 @@ bindAiPersist("aiProtocol", "aiDash.protocol",  false);
 
 /* ── 초기화: 저장된 키 복원 → 수동값으로 그린 뒤 자동 데이터 로드 ── */
 initManual();
+aiEstimated = load("aiDash.aiEstimated") || {};   // 이전에 적용한 뉴스AI추정 복원
 buildManualPanel();
 const savedFred = load("aiDash.fredKey");
 const savedEcos = load("aiDash.ecosKey");
