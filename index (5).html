@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Productivity Investment Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0B1220; --panel:#111A2C; --panel2:#0E1626; --line:#1E2A44;
+    --txt:#E8EDF7; --muted:#8A94AD; --faint:#5A6480;
+    --green:#34D399; --yellow:#FBBF24; --red:#F87171; --blue:#5B8DEF;
+    --green-bg:rgba(52,211,153,.12); --yellow-bg:rgba(251,191,36,.12); --red-bg:rgba(248,113,113,.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:'IBM Plex Sans KR',sans-serif;font-size:14px;line-height:1.55}
+  .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 20px 60px}
+
+  /* ── Header ── */
+  header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;padding:8px 0 18px;border-bottom:1px solid var(--line)}
+  header h1{font-size:19px;font-weight:700;letter-spacing:.2px}
+  header h1 .sub{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:3px}
+  .hd-right{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+  .keybox{display:grid;grid-template-columns:auto auto;gap:5px 8px;align-items:center}
+  .keybox input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:12px;width:210px;font-family:'IBM Plex Mono',monospace}
+  .keybox input:focus{outline:none;border-color:var(--blue)}
+  .keybox input.key-set{border-color:rgba(52,211,153,.55)}
+  .keyhint{font-size:10.5px;color:var(--faint);text-decoration:none;justify-self:start}
+  .keyhint:hover{color:var(--blue)}
+  .keybtns{display:flex;gap:8px}
+  .btn{background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 14px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .btn:hover{border-color:var(--blue)}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+  #status{font-size:12px;color:var(--muted);width:100%;text-align:right}
+  #status.err{color:var(--red)}
+  .err-panel{width:100%;margin-top:8px;background:var(--red-bg);border:1px solid rgba(248,113,113,.35);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--txt)}
+  .err-panel b{color:var(--red);display:block;margin-bottom:5px;font-size:12px}
+  .err-panel ul{margin:0;padding-left:16px;line-height:1.7}
+  .err-panel .mono{color:var(--muted)}
+
+  /* ── Hero: 결정 스트립 ── */
+  .hero{display:grid;grid-template-columns:230px 1fr;gap:24px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;margin:20px 0}
+  .gauge{position:relative;width:190px;height:190px;margin:auto}
+  .gauge svg{transform:rotate(-90deg)}
+  .gauge .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .gauge .num b{font-size:44px;font-weight:600;line-height:1}
+  .gauge .num span{font-size:11px;color:var(--muted);margin-top:4px}
+  .hero-body{display:flex;flex-direction:column;justify-content:center;gap:12px}
+  .decision-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .decision{font-size:30px;font-weight:700;letter-spacing:1px;padding:4px 18px;border-radius:10px}
+  .cycle-tag{font-size:13px;color:var(--muted)}
+  .cycle-tag b{color:var(--txt)}
+  #summaryMsg{font-size:14px;color:var(--txt);background:var(--panel2);border-left:3px solid var(--blue);border-radius:0 10px 10px 0;padding:12px 16px;max-width:760px}
+  .eq-weight{font-size:13px;color:var(--muted)}
+  .eq-weight b{font-size:16px;color:var(--txt)}
+
+  /* ── 섹션 공통 ── */
+  section{margin:28px 0}
+  section>h2{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:12px;display:flex;align-items:baseline;gap:10px}
+  section>h2 small{font-size:12px;font-weight:400;color:var(--faint)}
+
+  /* ── 프레임워크 카드 ── */
+  .fw-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .fw-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .fw-card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .fw-card .name{font-size:13px;font-weight:600}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .dot.green{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .dot.yellow{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+  .dot.red{background:var(--red);box-shadow:0 0 8px var(--red)}
+  .fw-card .metric{font-size:12px;color:var(--muted);min-height:34px}
+  .fw-card .action{font-size:12px;font-weight:600;margin-top:8px}
+  .fw-card .action.green{color:var(--green)} .fw-card .action.yellow{color:var(--yellow)} .fw-card .action.red{color:var(--red)}
+
+  /* ── 지표 테이블 ── */
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);font-size:12.5px}
+  th{color:var(--muted);font-weight:500;background:var(--panel2)}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right}
+  .lv{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+  .lv.bull{color:var(--green);background:var(--green-bg)}
+  .lv.neutral{color:var(--yellow);background:var(--yellow-bg)}
+  .lv.bear{color:var(--red);background:var(--red-bg)}
+  .src{font-size:11px;color:var(--faint)}
+  .src.auto{color:var(--blue)}
+
+  /* ── 차트 ── */
+  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .chart-card h3{font-size:13px;font-weight:600;margin-bottom:4px}
+  .chart-card .cap{font-size:11.5px;color:var(--muted);margin-bottom:10px}
+  .chart-box{position:relative;height:220px}
+  .chart-box.tall{height:300px}
+
+  /* ── RIM ── */
+  .rim-grid{display:grid;grid-template-columns:280px 1fr;gap:14px}
+  .rim-inputs{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .rim-inputs h3{font-size:13px;margin-bottom:10px}
+  .field{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+  .field label{font-size:12px;color:var(--muted)}
+  .field input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 8px;width:110px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px}
+  .field input:focus{outline:none;border-color:var(--blue)}
+  .field input.auto-filled{border-color:rgba(91,141,239,.5)}
+  .rim-tables{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .rim-t{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .rim-t h4{font-size:12.5px;margin-bottom:8px}
+  .rim-t table{border:none}
+  .rim-t td,.rim-t th{padding:6px 8px;font-size:11.5px}
+  .rim-summary{grid-column:1/-1;display:flex;gap:24px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-top:2px}
+  .rim-summary .item b{display:block;font-size:18px}
+  .rim-summary .item span{font-size:11.5px;color:var(--muted)}
+  .up-pos{color:var(--green)} .up-neg{color:var(--red)}
+
+  /* ── AI 사이클 맵 ── */
+  .cycle-strip{display:grid;grid-template-columns:repeat(11,1fr);gap:6px}
+  .cy{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 6px;text-align:center}
+  .cy .st{font-size:10px;font-weight:600;letter-spacing:.5px;margin-top:5px;display:block}
+  .cy .nm{font-size:11.5px;font-weight:600}
+  .cy.now{border-color:var(--green);background:var(--green-bg)} .cy.now .st{color:var(--green)}
+  .cy.entering{border-color:var(--yellow);background:var(--yellow-bg)} .cy.entering .st{color:var(--yellow)}
+  .cy.next .st{color:var(--blue)} .cy.future .st{color:var(--faint)}
+
+  /* ── 수동 입력 ── */
+  details.manual{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:0}
+  details.manual summary{cursor:pointer;padding:14px 18px;font-size:13.5px;font-weight:600;list-style:none;display:flex;justify-content:space-between}
+  details.manual summary::after{content:"▾";color:var(--muted)}
+  details[open].manual summary::after{content:"▴"}
+  .manual-body{padding:4px 18px 18px;border-top:1px solid var(--line)}
+  .manual-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 28px;margin-top:10px}
+  .manual-note{font-size:11.5px;color:var(--faint);margin-top:10px}
+
+  footer{margin-top:36px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint)}
+
+  @media (max-width:980px){
+    .fw-grid{grid-template-columns:repeat(2,1fr)}
+    .chart-grid,.rim-grid,.rim-tables{grid-template-columns:1fr}
+    .hero{grid-template-columns:1fr}
+    .cycle-strip{grid-template-columns:repeat(4,1fr)}
+    .manual-grid{grid-template-columns:1fr}
+    .keybox{grid-template-columns:1fr}
+    .keybox input{width:100%}
+    .hd-right{width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>AI PRODUCTIVITY INVESTMENT DASHBOARD
+      <span class="sub">생산성 증가 → 이익 증가 → 주가 상승 → 장기 복리 · 유동원식 판단 프레임</span>
+    </h1>
+    <div class="hd-right">
+      <div class="keybox">
+        <input id="fredKey" type="password" placeholder="FRED API Key (선택)" autocomplete="off">
+        <input id="ecosKey" type="password" placeholder="ECOS 인증키 (한국 지표)" autocomplete="off">
+        <a class="keyhint" href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noopener">FRED 키 발급 ↗</a>
+        <a class="keyhint" href="https://ecos.bok.or.kr/api/" target="_blank" rel="noopener">ECOS 키 발급 ↗</a>
+      </div>
+      <div class="keybtns">
+        <button class="btn primary" id="btnLoad">자동 데이터 불러오기</button>
+        <button class="btn" id="btnFresh" title="6시간 캐시 무시하고 재수집">강제 새로고침</button>
+      </div>
+    </div>
+    <div id="status">페이지를 열면 FRED·Yahoo 데이터를 불러옵니다. ECOS 인증키를 넣으면 한국 지표(기준금리·국고채·물가)도 자동 수집됩니다. 실패한 지표는 수동값으로 대체됩니다.</div>
+    <div id="errPanel" class="err-panel" hidden></div>
+  </header>
+
+  <!-- API 설정 -->
+  <details class="manual" id="apiPanel" style="margin-top:14px">
+    <summary>API 설정 — FRED · ECOS(한국은행) 키 입력 <span class="src" id="apiStatus"></span></summary>
+    <div class="manual-body">
+      <div class="manual-grid">
+        <div class="field"><label>FRED API Key <span class="src">(없으면 무키 CSV 모드)</span></label>
+          <input type="password" id="keyFred" placeholder="발급: fred.stlouisfed.org" style="width:180px"></div>
+        <div class="field"><label>ECOS API Key <span class="src">(한국은행 지표 자동화)</span></label>
+          <input type="password" id="keyEcos" placeholder="발급: ecos.bok.or.kr/api" style="width:180px"></div>
+        <div class="field"><label>&nbsp;</label>
+          <button class="btn primary" id="btnSaveKeys" style="width:180px">저장 후 재수집</button></div>
+      </div>
+      <div class="manual-grid" style="margin-top:6px">
+        <div class="field"><label>ECOS 가계신용 통계표코드</label>
+          <input type="text" id="ecosCreditStat" value="151Y002" style="width:120px"></div>
+        <div class="field"><label>ECOS 명목GDP(분기) 통계표코드</label>
+          <input type="text" id="ecosGdpStat" value="200Y105" style="width:120px"></div>
+        <div class="field"><label>ECOS 주기</label>
+          <input type="text" id="ecosCycle" value="Q" style="width:120px"></div>
+      </div>
+      <div class="manual-note">
+        키는 이 브라우저(localStorage)에만 저장되며 외부로 전송되지 않습니다 (해당 API 호출에만 사용).
+        ECOS 키 입력 시 <b>한국 가계부채/GDP</b>가 자동 계산됩니다 (가계신용 잔액 ÷ 최근 4분기 명목GDP).
+        통계표코드가 다르면 ECOS 통계코드검색(ecos.bok.or.kr)에서 확인 후 위 칸에서 수정하세요 — 잘못된 코드/단위는 범위 검증(30~150%)으로 자동 차단되고 수동값이 유지됩니다.
+      </div>
+    </div>
+  </details>
+
+  <!-- 결정 스트립 -->
+  <div class="hero">
+    <div class="gauge">
+      <svg width="190" height="190" viewBox="0 0 190 190">
+        <circle cx="95" cy="95" r="82" fill="none" stroke="var(--line)" stroke-width="14"/>
+        <circle id="gaugeArc" cx="95" cy="95" r="82" fill="none" stroke="var(--green)" stroke-width="14"
+                stroke-linecap="round" stroke-dasharray="515" stroke-dashoffset="515"/>
+      </svg>
+      <div class="num"><b id="scoreNum" class="mono">–</b><span>Overall Score / 100</span></div>
+    </div>
+    <div class="hero-body">
+      <div class="decision-row">
+        <span class="decision" id="decisionBadge">–</span>
+        <span class="eq-weight">권장 주식 비중 <b id="eqWeight" class="mono">–</b></span>
+        <span class="cycle-tag">AI Cycle: <b>Hardware → Network 진입</b></span>
+      </div>
+      <p id="summaryMsg">데이터를 불러오는 중이거나 수동 기본값 기준입니다.</p>
+      <div class="eq-weight" id="lastUpdated"></div>
+    </div>
+  </div>
+
+  <!-- 프레임워크 카드 -->
+  <section>
+    <h2>프레임워크 판단 <small>8개 영역 · 신호등 상태와 액션</small></h2>
+    <div class="fw-grid" id="fwGrid"></div>
+  </section>
+
+  <!-- 지표 상세 -->
+  <section>
+    <h2>지표 스코어보드 <small>파란 표시 = 자동 수집(FRED/Yahoo) · 회색 = 수동 입력</small></h2>
+    <table id="indTable">
+      <thead><tr>
+        <th>구분</th><th>지표</th><th class="num">현재값</th><th>기준 (Bull / Neutral / Bear)</th>
+        <th>신호</th><th class="num">가중치</th><th class="num">기여점수</th><th>소스</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- 차트 -->
+  <section>
+    <h2>시장 모니터링 <small>최근 1년 · 브라우저 직접 수집 (FRED CSV · Yahoo Finance)</small></h2>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>미국 10년물 국채금리 · Fed Rule 적정 PER</h3>
+        <div class="cap" id="fedRuleCap">적정 PER = 1 ÷ 10Y 금리</div>
+        <div class="chart-box"><canvas id="chRates"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>VIX (변동성)</h3>
+        <div class="cap">20 이하 안정 · 30 이상 위험</div>
+        <div class="chart-box"><canvas id="chVix"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>지수 상대 성과 (1년 전 = 100)</h3>
+        <div class="cap">XLK · SOXX · S&P 500 · KOSPI</div>
+        <div class="chart-box"><canvas id="chIdx"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>점수 기여도 분해</h3>
+        <div class="cap">지표별 가중 기여 = 신호점수 × 가중치 ÷ 총가중치</div>
+        <div class="chart-box tall"><canvas id="chContrib"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIM -->
+  <section>
+    <h2>RIM 적정가치 민감도 <small>FV = BPS × (ROE − g) ÷ (COE − g), COE = 무위험금리 + 리스크프리미엄</small></h2>
+    <div class="rim-grid">
+      <div class="rim-inputs">
+        <h3>모델 입력</h3>
+        <div class="field"><label>대상 (지수/ETF/기업)</label><input id="rimName" type="text" value="XLK"></div>
+        <div class="field"><label>현재가</label><input id="rimPrice" type="number" step="any" value="750"></div>
+        <div class="field"><label>BPS (주당순자산)</label><input id="rimBps" type="number" step="any" value="276"></div>
+        <div class="field"><label>무위험금리 (자동)</label><input id="rimRf" type="number" step="any" value="0.0448"></div>
+        <div class="field"><label>영구성장률 g</label><input id="rimG" type="number" step="any" value="0.025"></div>
+        <div class="field"><label>LT ROE – Worst</label><input id="roeWorst" type="number" step="any" value="0.436"></div>
+        <div class="field"><label>LT ROE – Likely</label><input id="roeLikely" type="number" step="any" value="0.513"></div>
+        <div class="field"><label>LT ROE – Bull</label><input id="roeBull" type="number" step="any" value="0.570"></div>
+      </div>
+      <div>
+        <div class="rim-tables" id="rimTables"></div>
+        <div class="rim-summary" id="rimSummary"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI 사이클 -->
+  <section>
+    <h2>AI 사이클 맵 <small>현재 투자 사이클 위치</small></h2>
+    <div class="cycle-strip" id="cycleStrip"></div>
+  </section>
+
+  <!-- 수동 입력 -->
+  <section>
+    <details class="manual" id="manualPanel">
+      <summary>수동 입력 지표 (EPS·CAPEX·HBM·부채·주주환원 등) — 수정 시 즉시 재계산</summary>
+      <div class="manual-body">
+        <div class="manual-grid" id="manualGrid"></div>
+        <div class="manual-note">
+          자동 API가 없는 지표는 분기 실적·컨센서스 발표 시 직접 갱신하세요. 값은 브라우저에 저장됩니다.
+          <button class="btn" id="btnReset" style="margin-left:10px">기본값 복원</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <footer>
+    데이터: FRED fredgraph.csv (금리·물가·생산성·부채·침체확률·VIX) · Yahoo Finance (XLK/SOXX/S&P500/KOSPI) — 브라우저 직접 수집(공개 CORS 프록시 경유) · 수동 입력 (EPS 컨센서스, Hyperscaler CAPEX, HBM, 주주환원)<br>
+    본 대시보드는 투자 판단 보조 도구이며 특정 종목의 매수·매도 권유가 아닙니다. Framework: 생산성 → 이익 → 주가 → 장기 복리.
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ═══════════════════════════════════════════════
+   1. 지표 정의 (Inputs 시트 기준 15개)
+   level(v) → 'bull' | 'neutral' | 'bear'
+   ═══════════════════════════════════════════════ */
+const IND = [
+  { key:"productivity", cat:"Macro", name:"미국 노동생산성 증가율", unit:"%", weight:8,
+    auto:d=>d?.fred?.productivity?.value, manualDefault:2.5, fw:"productivity",
+    rule:"> 2.0 / 1.0~2.0 / < 1.0",
+    level:v=> v>2 ? "bull" : v>=1 ? "neutral" : "bear" },
+  { key:"corePce", cat:"Macro", name:"Core PCE 인플레이션 (YoY)", unit:"%", weight:8,
+    auto:d=>d?.fred?.corePce?.value, manualDefault:2.8, fw:"rates",
+    rule:"2.0~3.0 / 3.0~4.0 또는 <2.0 / > 4.0",
+    level:v=> (v>=2&&v<=3) ? "bull" : v>4 ? "bear" : "neutral" },
+  { key:"us10y", cat:"Macro", name:"미국 10년물 국채금리", unit:"%", weight:7,
+    auto:d=>d?.fred?.us10y?.value, manualDefault:4.3, fw:"rates",
+    rule:"3.5~4.5 / 4.5~5.0 또는 <3.5 / > 5.0",
+    level:v=> (v>=3.5&&v<=4.5) ? "bull" : v>5 ? "bear" : "neutral" },
+  { key:"recessionProb", cat:"Macro", name:"미국 경기침체 확률", unit:"%", weight:10,
+    auto:d=>d?.fred?.recessionProb?.value, manualDefault:5, fw:"macro",
+    rule:"< 15 / 15~30 / > 30",
+    level:v=> v<15 ? "bull" : v<=30 ? "neutral" : "bear" },
+  { key:"vix", cat:"Macro", name:"VIX", unit:"", weight:5,
+    auto:d=>d?.fred?.vix?.value, manualDefault:16, fw:"macro",
+    rule:"< 20 / 20~30 / > 30",
+    level:v=> v<20 ? "bull" : v<=30 ? "neutral" : "bear" },
+  { key:"usHouseholdDebt", cat:"Debt", name:"미국 가계부채/GDP", unit:"%", weight:6,
+    auto:d=>d?.fred?.usHouseholdDebt?.value, manualDefault:65, fw:"debt",
+    rule:"< 75 / 75~90 / > 90",
+    level:v=> v<75 ? "bull" : v<=90 ? "neutral" : "bear" },
+  { key:"krHouseholdDebt", cat:"Debt", name:"한국 가계부채/GDP", unit:"%", weight:6,
+    auto:null, manualDefault:90, fw:"debt",
+    rule:"< 75 / 75~90 / > 90",
+    level:v=> v<75 ? "bull" : v<=90 ? "neutral" : "bear" },
+  { key:"krBaseRate", cat:"Korea", name:"한국 기준금리 (ECOS)", unit:"%", weight:0,
+    auto:d=>d?.ecos?.krBaseRate?.value, manualDefault:2.75, fw:"rates",
+    rule:"참고 지표 (점수 미반영)",
+    level:v=> "neutral" },
+  { key:"krTreasury10y", cat:"Korea", name:"한국 국고채 10년 (ECOS)", unit:"%", weight:4,
+    auto:d=>d?.ecos?.krTreasury10y?.value, manualDefault:3.0, fw:"rates",
+    rule:"< 2.8 / 2.8~3.6 / > 3.6",
+    level:v=> v<2.8 ? "bull" : v<=3.6 ? "neutral" : "bear" },
+  { key:"krCpi", cat:"Korea", name:"한국 CPI 상승률 (ECOS, YoY)", unit:"%", weight:4,
+    auto:d=>d?.ecos?.krCpi?.value, manualDefault:2.3, fw:"rates",
+    rule:"1.5~2.5 / 나머지 / > 3.5",
+    level:v=> (v>=1.5&&v<=2.5) ? "bull" : v>3.5 ? "bear" : "neutral" },
+  { key:"corpDebt", cat:"Debt", name:"기업부채/GDP", unit:"%", weight:6,
+    auto:null, manualDefault:118, fw:"debt",
+    rule:"< 100 / 100~130 / > 130",
+    level:v=> v<100 ? "bull" : v<=130 ? "neutral" : "bear" },
+  { key:"nasdaqEps", cat:"Earnings", name:"Nasdaq EPS 증가율", unit:"%", weight:10,
+    auto:null, manualDefault:47, fw:"earnings",
+    rule:"> 20 / 10~20 / < 10",
+    level:v=> v>20 ? "bull" : v>=10 ? "neutral" : "bear" },
+  { key:"kospiEps", cat:"Earnings", name:"KOSPI EPS 증가율", unit:"%", weight:8,
+    auto:null, manualDefault:40, fw:"earnings",
+    rule:"> 20 / 10~20 / < 10",
+    level:v=> v>20 ? "bull" : v>=10 ? "neutral" : "bear" },
+  { key:"capex", cat:"AI Cycle", name:"Hyperscaler CAPEX 증가율", unit:"%", weight:10,
+    auto:null, manualDefault:30, fw:"aicycle",
+    rule:"> 20 / 10~20 / < 10",
+    level:v=> v>20 ? "bull" : v>=10 ? "neutral" : "bear" },
+  { key:"hbm", cat:"AI Cycle", name:"HBM 수요 증가율", unit:"%", weight:10,
+    auto:null, manualDefault:50, fw:"aicycle",
+    rule:"> 30 / 10~30 / < 10",
+    level:v=> v>30 ? "bull" : v>=10 ? "neutral" : "bear" },
+  { key:"perVsFair", cat:"Valuation", name:"현재가 ÷ RIM Likely 적정가", unit:"x", weight:8,
+    auto:"rim", manualDefault:0.85, fw:"valuation",
+    rule:"< 1.0 / 1.0~1.2 / > 1.2",
+    level:v=> v<1 ? "bull" : v<=1.2 ? "neutral" : "bear" },
+  { key:"shReturn", cat:"환원", name:"자사주 + 배당수익률", unit:"%", weight:5,
+    auto:null, manualDefault:3, fw:"shareholder",
+    rule:"≥ 3 / 1~3 / < 1",
+    level:v=> v>=3 ? "bull" : v>=1 ? "neutral" : "bear" },
+  { key:"technical", cat:"기술적", name:"추세 신호 (컵앤핸들 등)", unit:"", weight:3,
+    auto:null, manualDefault:1, fw:"shareholder",
+    rule:"1 긍정 / 0 중립 / -1 부정",
+    level:v=> v>=1 ? "bull" : v<=-1 ? "bear" : "neutral" },
+];
+const LEVEL_PTS = { bull:100, neutral:60, bear:20 };
+
+const FRAMEWORKS = [
+  { key:"productivity", name:"Productivity",     driver:"AI 주도 생산성 개선" },
+  { key:"macro",        name:"Macro / Recession",driver:"침체 없음 = Risk-on" },
+  { key:"rates",        name:"Liquidity / Rates",driver:"할인율·물가 환경" },
+  { key:"debt",         name:"Debt Capacity",    driver:"국가별 부채 흡수 여력" },
+  { key:"earnings",     name:"Earnings Growth",  driver:"EPS 가속 여부" },
+  { key:"valuation",    name:"Valuation",        driver:"RIM · Fed Rule" },
+  { key:"aicycle",      name:"AI Cycle",         driver:"CAPEX · HBM 사이클" },
+  { key:"shareholder",  name:"Return / Trend",   driver:"주주환원 · 추세 확인" },
+];
+
+const CYCLE = [
+  ["GPU","now"],["HBM","now"],["Memory","now"],["Network","entering"],["Data Center","entering"],
+  ["Cloud","next"],["Software","next"],["Agent","next"],["Robot","future"],["Healthcare","future"],["Physical AI","future"]
+];
+const CYCLE_LABEL = { now:"NOW", entering:"ENTERING", next:"NEXT", future:"FUTURE" };
+
+/* ═══════════════════════════════════════════════
+   2. 상태 관리 (localStorage는 실패해도 무시)
+   ═══════════════════════════════════════════════ */
+let apiData = null;           // Worker 응답
+let manual = {};              // 수동 입력값
+let charts = {};
+
+function store(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+function load(key){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+
+function initManual(){
+  const saved = load("aiDash.manual") || {};
+  IND.forEach(i => { manual[i.key] = (saved[i.key] !== undefined) ? saved[i.key] : i.manualDefault; });
+}
+
+/* ═══════════════════════════════════════════════
+   3. RIM 모델
+   ═══════════════════════════════════════════════ */
+const RP_GRID = [0.055, 0.05, 0.045];
+const ROE_STEP = 0.005;
+
+function rimFv(bps, roe, rf, rp, g){
+  const coe = rf + rp;
+  if (coe - g <= 0) return NaN;
+  return bps * (roe - g) / (coe - g);
+}
+function rimInputs(){
+  const gv = id => parseFloat(document.getElementById(id).value);
+  return {
+    name: document.getElementById("rimName").value || "대상",
+    price: gv("rimPrice"), bps: gv("rimBps"), rf: gv("rimRf"), g: gv("rimG"),
+    scenarios: [
+      { tag:"Worst",  roe: gv("roeWorst") },
+      { tag:"Likely", roe: gv("roeLikely") },
+      { tag:"Bull",   roe: gv("roeBull") },
+    ],
+  };
+}
+function computeRim(){
+  const inp = rimInputs();
+  const out = { name: inp.name, price: inp.price, scenarios: [] };
+  for (const sc of inp.scenarios){
+    const rows = [sc.roe - ROE_STEP, sc.roe, sc.roe + ROE_STEP].map(roe => ({
+      roe, fvs: RP_GRID.map(rp => rimFv(inp.bps, roe, inp.rf, rp, inp.g)),
+    }));
+    const all = rows.flatMap(r => r.fvs).filter(Number.isFinite);
+    const avg = all.length ? all.reduce((a,b)=>a+b,0)/all.length : NaN;
+    out.scenarios.push({ ...sc, rows, avgFv: avg, upside: avg/inp.price - 1 });
+  }
+  return out;
+}
+
+/* ═══════════════════════════════════════════════
+   4. 점수 엔진
+   ═══════════════════════════════════════════════ */
+function evaluate(){
+  const rim = computeRim();
+  const likely = rim.scenarios.find(s=>s.tag==="Likely");
+  const rows = [];
+  let wSum = 0, sSum = 0;
+
+  for (const ind of IND){
+    let value, source;
+    if (ind.auto === "rim"){
+      value = (Number.isFinite(likely?.avgFv) && likely.avgFv > 0) ? rim.price / likely.avgFv : manual[ind.key];
+      source = "RIM 모델";
+    } else if (typeof ind.auto === "function"){
+      const v = ind.auto(apiData);
+      if (Number.isFinite(v)) { value = v; source = "자동"; }
+      else { value = manual[ind.key]; source = "수동(대체)"; }
+    } else {
+      value = manual[ind.key]; source = "수동";
+    }
+    const lv = ind.level(value);
+    const pts = LEVEL_PTS[lv];
+    wSum += ind.weight; sSum += pts * ind.weight;
+    rows.push({ ...ind, value, lv, pts, contrib: 0, source });
+  }
+  const score = sSum / wSum;
+  rows.forEach(r => r.contrib = r.pts * r.weight / wSum);
+
+  let decision, color, eq;
+  if (score >= 85)      { decision="STRONG BUY"; color="green";  eq="85~95%"; }
+  else if (score >= 70) { decision="BUY";        color="green";  eq="75~85%"; }
+  else if (score >= 55) { decision="HOLD";       color="yellow"; eq="55~70%"; }
+  else if (score >= 40) { decision="REDUCE";     color="yellow"; eq="35~55%"; }
+  else                  { decision="SELL";       color="red";    eq="< 35%";  }
+
+  // 프레임워크별 상태
+  const fw = FRAMEWORKS.map(f => {
+    const members = rows.filter(r => r.fw === f.key);
+    const w = members.reduce((a,m)=>a+m.weight,0) || 1;
+    const p = members.reduce((a,m)=>a+m.pts*m.weight,0) / w;
+    const st = p >= 80 ? "green" : p >= 50 ? "yellow" : "red";
+    const action = st==="green" ? "Increase / Hold" : st==="yellow" ? "Selective Accumulate" : "Reduce";
+    const detail = members.map(m=>`${m.name.split(" ")[0]} ${fmt(m.value, m.unit)}`).slice(0,2).join(" · ");
+    return { ...f, status: st, action, detail };
+  });
+
+  return { rows, score, decision, color, eq, fw, rim };
+}
+
+function summaryText(r){
+  if (r.score >= 70){
+    return `현재 시장은 AI 생산성 사이클, 이익 증가율, 금리 환경을 고려할 때 주식 비중 확대가 가능한 구간입니다. ` +
+      `다만 밸류에이션 부담과 경기침체 위험이 상승할 경우 비중 조절이 필요합니다. ` +
+      `핵심 투자 대상은 미국·한국·대만의 AI 반도체, HBM, 데이터센터, 네트워크, AI 소프트웨어 기업입니다.`;
+  }
+  if (r.score >= 55){
+    return `현재 시장은 일부 지표가 중립 구간에 진입해 있어 신규 매수보다는 보유 중심의 대응이 적절합니다. ` +
+      `이익 증가율과 AI CAPEX 사이클이 유지되는지 확인하며 선별적 비중 조절이 필요합니다.`;
+  }
+  return `현재 시장은 이익 증가율 둔화, 금리 상승, 경기침체 위험 확대가 동시에 나타나고 있어 주식 비중 축소가 필요합니다. ` +
+    `AI 장기 사이클은 유효하나 단기적으로는 현금 비중 확대와 핵심 종목 중심의 압축 보유가 필요합니다.`;
+}
+
+/* ═══════════════════════════════════════════════
+   5. 렌더링
+   ═══════════════════════════════════════════════ */
+function fmt(v, unit){
+  if (!Number.isFinite(v)) return "–";
+  const s = Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(2);
+  return s + (unit || "");
+}
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function render(){
+  const r = evaluate();
+
+  // 게이지
+  const arc = document.getElementById("gaugeArc");
+  const circ = 2 * Math.PI * 82;
+  arc.setAttribute("stroke-dasharray", circ);
+  arc.setAttribute("stroke-dashoffset", circ * (1 - r.score/100));
+  arc.setAttribute("stroke", cssVar("--" + r.color));
+  document.getElementById("scoreNum").textContent = r.score.toFixed(1);
+
+  const badge = document.getElementById("decisionBadge");
+  badge.textContent = r.decision;
+  badge.style.color = cssVar("--" + r.color);
+  badge.style.background = r.color==="green" ? "var(--green-bg)" : r.color==="yellow" ? "var(--yellow-bg)" : "var(--red-bg)";
+  document.getElementById("eqWeight").textContent = r.eq;
+  document.getElementById("summaryMsg").textContent = summaryText(r);
+  document.getElementById("lastUpdated").textContent = apiData
+    ? `자동 데이터 갱신: ${new Date(apiData.updated).toLocaleString("ko-KR")}` + (apiData.errors?.length ? ` · 일부 오류 ${apiData.errors.length}건 (콘솔 확인)` : "")
+    : "자동 데이터 미연결 — 수동 기본값 기준";
+
+  // 프레임워크 카드
+  document.getElementById("fwGrid").innerHTML = r.fw.map(f => `
+    <div class="fw-card">
+      <div class="top"><span class="name">${f.name}</span><span class="dot ${f.status}"></span></div>
+      <div class="metric">${f.driver}<br><span class="src">${f.detail}</span></div>
+      <div class="action ${f.status}">${f.action}</div>
+    </div>`).join("");
+
+  // 지표 테이블
+  document.querySelector("#indTable tbody").innerHTML = r.rows.map(x => `
+    <tr>
+      <td>${x.cat}</td>
+      <td>${x.name}</td>
+      <td class="num mono">${fmt(x.value, x.unit)}</td>
+      <td class="src">${x.rule}</td>
+      <td><span class="lv ${x.lv}">${x.lv==="bull"?"Bull":x.lv==="neutral"?"Neutral":"Bear"}</span></td>
+      <td class="num mono">${x.weight}</td>
+      <td class="num mono">${x.contrib.toFixed(1)}</td>
+      <td><span class="src ${x.source==="자동"?"auto":""}">${x.source}</span></td>
+    </tr>`).join("");
+
+  // RIM
+  renderRim(r.rim);
+  // 기여도 차트
+  renderContrib(r.rows);
+  // 사이클 맵
+  document.getElementById("cycleStrip").innerHTML = CYCLE.map(([nm, st]) =>
+    `<div class="cy ${st}"><span class="nm">${nm}</span><span class="st">${CYCLE_LABEL[st]}</span></div>`).join("");
+}
+
+function renderRim(rim){
+  const box = document.getElementById("rimTables");
+  box.innerHTML = rim.scenarios.map(sc => `
+    <div class="rim-t">
+      <h4>${sc.tag} <span class="src">(LT ROE ${(sc.roe*100).toFixed(1)}%)</span></h4>
+      <table>
+        <thead><tr><th>ROE \\ RP</th>${RP_GRID.map(rp=>`<th class="num">${(rp*100).toFixed(1)}%</th>`).join("")}</tr></thead>
+        <tbody>${sc.rows.map(row=>`
+          <tr><td class="mono">${(row.roe*100).toFixed(1)}%</td>
+          ${row.fvs.map(fv=>`<td class="num mono">${Number.isFinite(fv)?fv.toFixed(0):"–"}</td>`).join("")}</tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`).join("");
+
+  document.getElementById("rimSummary").innerHTML =
+    `<div class="item"><b class="mono">${rim.price.toFixed(0)}</b><span>${rim.name} 현재가</span></div>` +
+    rim.scenarios.map(sc => {
+      const up = sc.upside * 100;
+      return `<div class="item"><b class="mono ${up>=0?"up-pos":"up-neg"}">${Number.isFinite(up)?(up>=0?"+":"")+up.toFixed(1)+"%":"–"}</b>
+        <span>${sc.tag} 적정가 ${Number.isFinite(sc.avgFv)?sc.avgFv.toFixed(0):"–"} 대비</span></div>`;
+    }).join("");
+}
+
+/* ── 차트 ── */
+const chartBase = () => ({
+  responsive:true, maintainAspectRatio:false,
+  plugins:{ legend:{ labels:{ color:cssVar("--muted"), boxWidth:10, font:{size:11} } } },
+  scales:{
+    x:{ ticks:{ color:cssVar("--faint"), maxTicksLimit:7, font:{size:10} }, grid:{ color:"rgba(30,42,68,.5)" } },
+    y:{ ticks:{ color:cssVar("--faint"), font:{size:10} }, grid:{ color:"rgba(30,42,68,.5)" } },
+  },
+});
+function upsert(id, cfg){
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+function renderAutoCharts(){
+  if (!apiData) return;
+  const f = apiData.fred || {}, m = apiData.market || {};
+
+  if (f.us10y?.history){
+    upsert("chRates", { type:"line",
+      data:{ labels:f.us10y.history.map(p=>p.d),
+        datasets:[{ label:"10Y (%)", data:f.us10y.history.map(p=>p.v), borderColor:cssVar("--blue"), pointRadius:0, borderWidth:1.6, tension:.25 }] },
+      options: chartBase() });
+    const y = f.us10y.value;
+    if (Number.isFinite(y) && y>0)
+      document.getElementById("fedRuleCap").textContent =
+        `현재 10Y ${y.toFixed(2)}% → Fed Rule 적정 PER ${(100/y).toFixed(1)}배`;
+  }
+  if (f.vix?.history){
+    upsert("chVix", { type:"line",
+      data:{ labels:f.vix.history.map(p=>p.d),
+        datasets:[{ label:"VIX", data:f.vix.history.map(p=>p.v), borderColor:cssVar("--yellow"), pointRadius:0, borderWidth:1.6, tension:.25 }] },
+      options: chartBase() });
+  }
+  const idxColors = { xlk:cssVar("--blue"), soxx:cssVar("--green"), sp500:cssVar("--muted"), kospi:cssVar("--red") };
+  const ds = [];
+  for (const [k, v] of Object.entries(m)){
+    if (!v?.history?.length) continue;
+    const base = v.history[0].v;
+    ds.push({ label:v.label, data:v.history.map(p=>({x:p.d, y:+(p.v/base*100).toFixed(1)})),
+      borderColor:idxColors[k]||cssVar("--faint"), pointRadius:0, borderWidth:1.6, tension:.25 });
+  }
+  if (ds.length){
+    const labels = ds[0].data.map(p=>p.x);
+    upsert("chIdx", { type:"line",
+      data:{ labels, datasets: ds.map(d=>({ ...d, data:d.data.map(p=>p.y) })) },
+      options: chartBase() });
+  }
+}
+
+function renderContrib(rows){
+  const sorted = [...rows].sort((a,b)=>b.contrib-a.contrib);
+  const colorOf = lv => lv==="bull"?cssVar("--green"):lv==="neutral"?cssVar("--yellow"):cssVar("--red");
+  upsert("chContrib", { type:"bar",
+    data:{ labels:sorted.map(r=>r.name),
+      datasets:[{ label:"기여 점수", data:sorted.map(r=>+r.contrib.toFixed(1)),
+        backgroundColor:sorted.map(r=>colorOf(r.lv)+"CC"), borderRadius:4 }] },
+    options:{ ...chartBase(), indexAxis:"y",
+      plugins:{ legend:{ display:false } },
+      scales:{ x:{ ticks:{color:cssVar("--faint"),font:{size:10}}, grid:{color:"rgba(30,42,68,.5)"} },
+               y:{ ticks:{color:cssVar("--muted"),font:{size:10}}, grid:{display:false} } } } });
+}
+
+/* ═══════════════════════════════════════════════
+   6. 수동 입력 패널
+   ═══════════════════════════════════════════════ */
+function buildManualPanel(){
+  const grid = document.getElementById("manualGrid");
+  const manualInds = IND.filter(i => i.auto === null);
+  grid.innerHTML = manualInds.map(i => `
+    <div class="field"><label>${i.name} (${i.unit||"신호"})</label>
+      <input type="number" step="any" data-key="${i.key}" value="${manual[i.key]}"></div>`).join("");
+  grid.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(v)){ manual[inp.dataset.key] = v; store("aiDash.manual", manual); render(); }
+    });
+  });
+}
+document.getElementById("btnReset").addEventListener("click", () => {
+  IND.forEach(i => manual[i.key] = i.manualDefault);
+  store("aiDash.manual", manual);
+  buildManualPanel(); render();
+});
+
+/* ═══════════════════════════════════════════════
+   7. 데이터 수집 엔진 (브라우저 직접, 서버 불필요)
+   - FRED: fredgraph.csv (API 키 불필요)
+   - Yahoo Finance: chart API
+   - CORS: 공개 프록시 3개 체인 폴백
+   - 캐시: localStorage 6시간
+   ═══════════════════════════════════════════════ */
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+const PROXIES = [
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  u => `https://proxy.cors.sh/${u}`,
+];
+const goodProxyByHost = {}; // 호스트별로 마지막에 성공한 프록시 기억
+
+function hostOf(url){ try{ return new URL(url).host; }catch(e){ return url; } }
+
+async function fetchViaProxy(url){
+  const host = hostOf(url);
+  const pref = goodProxyByHost[host];
+  const order = (pref !== undefined ? [pref, ...PROXIES.keys()] : [...PROXIES.keys()])
+    .filter((v,i,a)=>a.indexOf(v)===i);
+  let lastErr = null;
+  for (const i of order){
+    try{
+      const res = await fetch(PROXIES[i](url), { signal: AbortSignal.timeout(20000) });
+      if (!res.ok) throw new Error(`프록시${i} HTTP ${res.status}`);
+      const text = await res.text();
+      if (!text || text.length < 10) throw new Error(`프록시${i} 빈 응답`);
+      // 프록시 자체 에러 페이지 감지 (HTML로 감싼 오류)
+      const head = text.slice(0, 200).toLowerCase();
+      if (head.includes("<!doctype html") || head.includes("<html")){
+        if (!url.includes("fredgraph")) throw new Error(`프록시${i} HTML 오류응답`);
+      }
+      goodProxyByHost[host] = i;
+      return text;
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("모든 프록시 실패");
+}
+
+// FRED 시리즈 정의 (worker.js와 동일 스펙)
+const FRED_SERIES = {
+  us10y:          { id:"DGS10",         type:"level", lookbackMonths:13, history:true,  label:"미국 10년물 국채금리 (%)" },
+  vix:            { id:"VIXCLS",        type:"level", lookbackMonths:13, history:true,  label:"VIX" },
+  corePce:        { id:"PCEPILFE",      type:"yoy",   lookbackMonths:30, history:false, label:"Core PCE YoY (%)" },
+  unemployment:   { id:"UNRATE",        type:"level", lookbackMonths:30, history:false, label:"실업률 (%)" },
+  yieldCurve:     { id:"T10Y3M",        type:"level", lookbackMonths:13, history:false, label:"10Y-3M 금리차 (%p)" },
+  recessionProb:  { id:"RECPROUSM156N", type:"level", lookbackMonths:18, history:false, label:"경기침체 확률 (%)" },
+  productivity:   { id:"OPHNFB",        type:"yoy",   lookbackMonths:40, history:false, label:"미국 노동생산성 YoY (%)" },
+  usHouseholdDebt:{ id:"HDTGPDUSQ163N", type:"level", lookbackMonths:30, history:false, label:"미국 가계부채/GDP (%)" },
+};
+const MARKET_SYMBOLS = {
+  xlk:   { symbol:"XLK",   label:"XLK (미국 IT)" },
+  soxx:  { symbol:"SOXX",  label:"SOXX (반도체)" },
+  sp500: { symbol:"^GSPC", label:"S&P 500" },
+  kospi: { symbol:"^KS11", label:"KOSPI" },
+};
+
+// ECOS(한국은행) 시리즈 — 인증키 필요
+//   period: D(일)·M(월), item: 항목코드, type: level | yoy(월 지수→전년동월 대비)
+const ECOS_SERIES = {
+  krBaseRate:    { stat:"722Y001", item:"0101000", period:"M", type:"level", lookbackMonths:6,  label:"한국 기준금리 (%)" },
+  krTreasury10y: { stat:"817Y002", item:"010210000", period:"D", type:"level", lookbackDays:20, label:"한국 국고채 10년 (%)" },
+  krCpi:         { stat:"901Y009", item:"0",       period:"M", type:"yoy",   lookbackMonths:15, label:"한국 CPI YoY (%)" },
+};
+
+async function fetchFredSeries(cfg, fredKey){
+  const start = new Date();
+  start.setMonth(start.getMonth() - cfg.lookbackMonths);
+  const startStr = start.toISOString().slice(0,10);
+
+  let obs = [];
+  // 키가 있으면 정식 JSON API 우선, 실패 시 키 없는 CSV로 폴백
+  if (fredKey){
+    try{
+      const api = `https://api.stlouisfed.org/fred/series/observations?series_id=${cfg.id}` +
+                  `&api_key=${encodeURIComponent(fredKey)}&file_type=json&observation_start=${startStr}`;
+      const txt = await fetchViaProxy(api);
+      const data = JSON.parse(txt);
+      if (data.error_message) throw new Error(data.error_message);
+      obs = (data.observations || [])
+        .map(o=>({ date:o.date, value:parseFloat(o.value) }))
+        .filter(o=>Number.isFinite(o.value));
+    }catch(e){ obs = []; /* CSV 폴백 */ }
+  }
+  if (!obs.length){
+    const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${cfg.id}&cosd=${startStr}`;
+    const csv = await fetchViaProxy(url);
+    for (const line of csv.trim().split(/\r?\n/).slice(1)){
+      const idx = line.indexOf(",");
+      if (idx < 0) continue;
+      const d = line.slice(0, idx).trim();
+      const v = parseFloat(line.slice(idx + 1));
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(v)) obs.push({ date:d, value:v });
+    }
+  }
+  if (!obs.length) throw new Error("관측치 없음");
+
+  const latest = obs[obs.length - 1];
+  let value;
+  if (cfg.type === "yoy"){
+    const target = new Date(latest.date);
+    target.setFullYear(target.getFullYear() - 1);
+    let base = null, best = Infinity;
+    for (const o of obs){
+      const diff = Math.abs(new Date(o.date) - target);
+      if (diff < best){ best = diff; base = o; }
+    }
+    if (!base || base.value === 0) throw new Error("YoY 기준값 없음");
+    value = ((latest.value / base.value) - 1) * 100;
+  } else {
+    value = latest.value;
+  }
+
+  const out = { label:cfg.label, seriesId:cfg.id, value:+value.toFixed(2), asOf:latest.date };
+  if (cfg.history){
+    const step = Math.max(1, Math.floor(obs.length / 130));
+    out.history = obs.filter((_,i)=> i%step===0 || i===obs.length-1)
+                     .map(o=>({ d:o.date, v:+o.value.toFixed(2) }));
+  }
+  return out;
+}
+
+async function fetchEcosSeries(cfg, ecosKey){
+  // 조회 기간 계산
+  const end = new Date();
+  const start = new Date();
+  if (cfg.period === "D"){
+    start.setDate(start.getDate() - (cfg.lookbackDays || 20));
+  } else {
+    start.setMonth(start.getMonth() - (cfg.lookbackMonths || 12));
+  }
+  const fmtT = (dt) => cfg.period === "D"
+    ? dt.toISOString().slice(0,10).replace(/-/g,"")
+    : dt.toISOString().slice(0,7).replace("-","");
+  const s = fmtT(start), e = fmtT(end);
+
+  const url = `https://ecos.bok.or.kr/api/StatisticSearch/${encodeURIComponent(ecosKey)}/json/kr/1/100/` +
+              `${cfg.stat}/${cfg.period}/${s}/${e}/${cfg.item}`;
+  const txt = await fetchViaProxy(url);
+  const data = JSON.parse(txt);
+
+  if (data.RESULT) throw new Error(data.RESULT.MESSAGE || data.RESULT.CODE || "ECOS 오류");
+  const rows = data?.StatisticSearch?.row || [];
+  const obs = rows
+    .map(r=>({ time:r.TIME, value:parseFloat(r.DATA_VALUE) }))
+    .filter(o=> o.time && Number.isFinite(o.value))
+    .sort((a,b)=> a.time.localeCompare(b.time));
+  if (!obs.length) throw new Error("관측치 없음");
+
+  const latest = obs[obs.length - 1];
+  let value;
+  if (cfg.type === "yoy"){
+    // 월간 지수 → 전년동월 대비 (TIME = YYYYMM)
+    const ly = String(parseInt(latest.time.slice(0,4),10) - 1) + latest.time.slice(4);
+    const base = obs.find(o=>o.time === ly);
+    if (!base || base.value === 0) throw new Error("YoY 기준월 없음");
+    value = ((latest.value / base.value) - 1) * 100;
+  } else {
+    value = latest.value;
+  }
+
+  const asOf = latest.time.length === 8
+    ? `${latest.time.slice(0,4)}-${latest.time.slice(4,6)}-${latest.time.slice(6,8)}`
+    : `${latest.time.slice(0,4)}-${latest.time.slice(4,6)}`;
+  return { label:cfg.label, stat:cfg.stat, value:+value.toFixed(2), asOf };
+}
+
+async function fetchYahooSymbol(cfg){
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cfg.symbol)}?range=1y&interval=1d`;
+  const text = await fetchViaProxy(url);
+  const data = JSON.parse(text);
+  const result = data?.chart?.result?.[0];
+  if (!result) throw new Error("응답 구조 오류");
+
+  const ts = result.timestamp || [];
+  const closes = result.indicators?.quote?.[0]?.close || [];
+  const points = [];
+  for (let i = 0; i < ts.length; i++){
+    if (Number.isFinite(closes[i]))
+      points.push({ d:new Date(ts[i]*1000).toISOString().slice(0,10), v:+closes[i].toFixed(2) });
+  }
+  if (!points.length) throw new Error("종가 데이터 없음");
+
+  const last = points[points.length-1], first = points[0];
+  const step = Math.max(1, Math.floor(points.length / 52));
+  return {
+    label:cfg.label, symbol:cfg.symbol, price:last.v, asOf:last.d,
+    return1y:+(((last.v/first.v)-1)*100).toFixed(2),
+    history: points.filter((_,i)=> i%step===0 || i===points.length-1),
+  };
+}
+
+// 동시 요청 제한 (프록시 부하·차단 방지)
+async function runPool(tasks, limit = 3){
+  const queue = [...tasks];
+  const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length){ const t = queue.shift(); await t(); }
+  });
+  await Promise.all(workers);
+}
+
+async function loadData(fresh){
+  const st = document.getElementById("status");
+  const fredKey = document.getElementById("fredKey").value.trim();
+  const ecosKey = document.getElementById("ecosKey").value.trim();
+  store("aiDash.fredKey", fredKey);
+  store("aiDash.ecosKey", ecosKey);
+  document.getElementById("fredKey").classList.toggle("key-set", !!fredKey);
+  document.getElementById("ecosKey").classList.toggle("key-set", !!ecosKey);
+
+  // 캐시 키는 인증키 조합에 따라 분리 (키 바꾸면 캐시 무시)
+  const cacheTag = (fredKey?"F":"") + (ecosKey?"E":"");
+  const cacheKey = "aiDash.dataCache." + (cacheTag || "none");
+
+  if (!fresh){
+    const cached = load(cacheKey);
+    if (cached?.ts && Date.now() - cached.ts < CACHE_TTL_MS && cached.data){
+      apiData = cached.data;
+      applyAutoRf();
+      st.className = "";
+      st.textContent = `캐시 데이터 사용 (${new Date(cached.ts).toLocaleString("ko-KR")} 수집 · 강제 새로고침으로 갱신 가능)`;
+      showErrors(cached.data.errors);
+      renderAutoCharts(); render();
+      return;
+    }
+  }
+
+  st.className = "";
+  const ecosKeys = ecosKey ? Object.keys(ECOS_SERIES) : [];
+  const total = Object.keys(FRED_SERIES).length + Object.keys(MARKET_SYMBOLS).length + ecosKeys.length;
+  let done = 0, ok = 0;
+  const tick = () => { st.textContent = `데이터 수집 중… ${done}/${total} (성공 ${ok})`; };
+  tick();
+
+  const result = { updated:new Date().toISOString(), fred:{}, market:{}, ecos:{}, errors:[] };
+  const tasks = [];
+
+  for (const [key, cfg] of Object.entries(FRED_SERIES)){
+    tasks.push(async () => {
+      try{ result.fred[key] = await fetchFredSeries(cfg, fredKey); ok++; }
+      catch(e){ result.fred[key] = null; result.errors.push(`FRED ${cfg.id}: ${e.message}`); }
+      done++; tick();
+    });
+  }
+  for (const [key, cfg] of Object.entries(MARKET_SYMBOLS)){
+    tasks.push(async () => {
+      try{ result.market[key] = await fetchYahooSymbol(cfg); ok++; }
+      catch(e){ result.market[key] = null; result.errors.push(`Yahoo ${cfg.symbol}: ${e.message}`); }
+      done++; tick();
+    });
+  }
+  for (const key of ecosKeys){
+    const cfg = ECOS_SERIES[key];
+    tasks.push(async () => {
+      try{ result.ecos[key] = await fetchEcosSeries(cfg, ecosKey); ok++; }
+      catch(e){ result.ecos[key] = null; result.errors.push(`ECOS ${cfg.stat}: ${e.message}`); }
+      done++; tick();
+    });
+  }
+  await runPool(tasks, 3);
+
+  if (ok === 0){
+    st.className = "err";
+    st.textContent = "자동 수집 전부 실패 (프록시/네트워크/인증키 확인) — 수동 기본값으로 계산합니다.";
+    showErrors(result.errors);
+    apiData = null; render();
+    return;
+  }
+
+  apiData = result;
+  store(cacheKey, { ts: Date.now(), data: result });
+  applyAutoRf();
+  if (result.errors.length) console.warn("수집 실패 항목:", result.errors);
+  showErrors(result.errors);
+  const ecosNote = ecosKey ? ` · ECOS 한국지표 ${ecosKeys.filter(k=>result.ecos[k]).length}/${ecosKeys.length}` : " · ECOS 키 미입력(한국지표 수동값)";
+  st.textContent = `자동 데이터 로드 완료 — 성공 ${ok}/${total}${ecosNote}` +
+    (result.errors.length ? ` · 실패 ${result.errors.length}건 (아래 참고)` : "");
+  renderAutoCharts(); render();
+}
+
+function showErrors(errors){
+  const panel = document.getElementById("errPanel");
+  if (!errors || !errors.length){ panel.hidden = true; panel.innerHTML = ""; return; }
+  panel.hidden = false;
+  panel.innerHTML = `<b>수집 실패 ${errors.length}건 (해당 지표는 수동 기본값 사용)</b>` +
+    `<ul>${errors.map(e=>`<li class="mono">${e.replace(/</g,"&lt;")}</li>`).join("")}</ul>` +
+    `<div style="margin-top:6px;color:var(--muted)">대부분 공개 CORS 프록시의 일시적 차단입니다. <b style="display:inline;color:var(--txt)">강제 새로고침</b>을 1~2회 눌러보세요. 계속 실패하면 프록시 문제이며, 안정 수집이 필요하면 동봉 worker.js(Cloudflare) 사용을 권장합니다.</div>`;
+}
+
+function applyAutoRf(){
+  const y = apiData?.fred?.us10y?.value;
+  if (Number.isFinite(y)){
+    const rf = document.getElementById("rimRf");
+    rf.value = (y/100).toFixed(4);
+    rf.classList.add("auto-filled");
+  }
+}
+
+document.getElementById("btnLoad").addEventListener("click", () => loadData(false));
+document.getElementById("btnFresh").addEventListener("click", () => loadData(true));
+["rimName","rimPrice","rimBps","rimRf","rimG","roeWorst","roeLikely","roeBull"].forEach(id =>
+  document.getElementById(id).addEventListener("input", render));
+
+/* ── 초기화: 저장된 키 복원 → 수동값으로 그린 뒤 자동 데이터 로드 ── */
+initManual();
+buildManualPanel();
+const savedFred = load("aiDash.fredKey");
+const savedEcos = load("aiDash.ecosKey");
+if (savedFred){ document.getElementById("fredKey").value = savedFred; document.getElementById("fredKey").classList.add("key-set"); }
+if (savedEcos){ document.getElementById("ecosKey").value = savedEcos; document.getElementById("ecosKey").classList.add("key-set"); }
+render();
+loadData(false);
+</script>
+</body>
+</html>
