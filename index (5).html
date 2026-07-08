@@ -836,11 +836,18 @@ function renderAutoCharts(){
   if (ds.length){
     const labels = ds[0].data.map(p=>p.x);
     const datasets = ds.map(d=>({ ...d, data:d.data.map(p=>p.y), yAxisID:"y" }));
-    // AI Score 오버레이 (우측 축 0~100 · 자동 지표만 재정규화)
-    const scoreData = labels.map(d => { const v = computeScoreAt(d); return Number.isFinite(v) ? +v.toFixed(1) : null; });
-    if (scoreData.some(v => v !== null)){
+    // AI Score 오버레이 (우측 축 0~100 · 자동 지표만 재정규화) — 실패해도 지수 차트는 유지
+    let scoreData = null;
+    try { scoreData = labels.map(d => { const v = computeScoreAt(d); return Number.isFinite(v) ? +v.toFixed(1) : null; }); }
+    catch(err){ console.warn("[AI Score] 계산 오류:", err); }
+    if (scoreData && scoreData.some(v => v !== null)){
       datasets.push({ label:"AI Score (매크로·우측축)", data:scoreData, yAxisID:"y1",
         borderColor:cssVar("--txt"), borderWidth:2.2, borderDash:[5,3], pointRadius:0, tension:.2, spanGaps:true });
+    } else {
+      console.warn("[AI Score] 과거 스코어 미표시 — history 시계열 없음(옛 캐시일 수 있음, '강제 새로고침' 시도).", {
+        us10y:(apiData.fred?.us10y?.history||[]).length, vix:(apiData.fred?.vix?.history||[]).length,
+        recessionProb:(apiData.fred?.recessionProb?.history||[]).length, corePce:(apiData.fred?.corePce?.history||[]).length,
+        xlk:(apiData.market?.xlk?.history||[]).length, labels:(labels||[]).length });
     }
     const opt = chartBase();
     opt.scales.y1 = { position:"right", min:0, max:100,
@@ -1130,7 +1137,8 @@ async function loadData(fresh){
 
   // 캐시 키는 인증키 조합에 따라 분리 (키 바꾸면 캐시 무시)
   const cacheTag = (fredKey?"F":"") + (ecosKey?"E":"");
-  const cacheKey = "aiDash.dataCache." + (cacheTag || "none");
+  // v3: 과거 스코어용 history 시계열 추가 → 이전 캐시(구조 다름) 자동 무효화
+  const cacheKey = "aiDash.dataCache.v3." + (cacheTag || "none");
 
   if (!fresh){
     const cached = load(cacheKey);
