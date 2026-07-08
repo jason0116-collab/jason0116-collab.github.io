@@ -332,7 +332,7 @@
 
   <!-- 차트 -->
   <section>
-    <h2>시장 모니터링 <small>최근 1년 · 브라우저 직접 수집 (FRED CSV · Yahoo Finance)</small></h2>
+    <h2>시장 모니터링 <small>2023년~ 현재 · 브라우저 직접 수집 (FRED CSV · Yahoo Finance)</small></h2>
     <div class="chart-grid">
       <div class="chart-card">
         <h3>미국 10년물 국채금리 · Fed Rule 적정 PER</h3>
@@ -345,8 +345,8 @@
         <div class="chart-box"><canvas id="chVix"></canvas></div>
       </div>
       <div class="chart-card">
-        <h3>지수 상대 성과 (1년 전 = 100)</h3>
-        <div class="cap">XLK · SOXX · S&P 500 · KOSPI</div>
+        <h3>지수 상대 성과 + AI Score</h3>
+        <div class="cap">2023년 초 = 100 (좌축) · 점선 = AI Score 매크로 재정규화 0~100 (우축) · XLK · SOXX · S&P 500 · KOSPI</div>
         <div class="chart-box"><canvas id="chIdx"></canvas></div>
       </div>
       <div class="chart-card">
@@ -735,6 +735,76 @@ function upsert(id, cfg){
   charts[id] = new Chart(document.getElementById(id), cfg);
 }
 
+/* ── 과거 스코어 산정 (2023~) : 과거 시계열이 있는 자동 지표만, 가중치 재정규화 ──
+   수동/추정 지표(EPS·CAPEX·HBM·RIM·주주환원)는 과거값이 없어 제외됨 → 절대수준은
+   현재 게이지와 다르며, "매크로·시장 국면"의 흐름을 나타냄. */
+const HIST_SCORE_KEYS = ["productivity","corePce","us10y","recessionProb","vix",
+  "usHouseholdDebt","krHouseholdDebt","krTreasury10y","krCpi","corpDebt","technical"];
+
+function valueAsOf(history, dateStr){
+  if (!history || !history.length) return NaN;
+  let v = NaN;
+  for (const p of history){ if (p.d <= dateStr) v = p.v; else break; }
+  return v;
+}
+function yoyAsOf(history, dateStr){
+  const cur = valueAsOf(history, dateStr);
+  const dt = new Date(dateStr); dt.setFullYear(dt.getFullYear() - 1);
+  const base = valueAsOf(history, dt.toISOString().slice(0,10));
+  if (!Number.isFinite(cur) || !Number.isFinite(base) || base === 0) return NaN;
+  return (cur / base - 1) * 100;
+}
+function histIndicatorValue(key, dateStr){
+  const f = apiData?.fred || {}, e = apiData?.ecos || {}, mk = apiData?.market || {};
+  switch(key){
+    case "productivity":    return yoyAsOf(f.productivity?.history, dateStr);
+    case "corePce":         return yoyAsOf(f.corePce?.history, dateStr);
+    case "krCpi":           return yoyAsOf(e.krCpi?.history, dateStr);
+    case "us10y":           return valueAsOf(f.us10y?.history, dateStr);
+    case "recessionProb":   return valueAsOf(f.recessionProb?.history, dateStr);
+    case "vix":             return valueAsOf(f.vix?.history, dateStr);
+    case "usHouseholdDebt": return valueAsOf(f.usHouseholdDebt?.history, dateStr);
+    case "krHouseholdDebt": return valueAsOf(f.krHouseholdDebt?.history, dateStr);
+    case "krTreasury10y":   return valueAsOf(e.krTreasury10y?.history, dateStr);
+    case "corpDebt": {
+      const credit = valueAsOf(f._krNfcCredit?.history, dateStr);
+      const gh = f._krNominalGdp?.history;
+      if (!Number.isFinite(credit) || !gh) return NaN;
+      const gg = gh.filter(p=>p.d <= dateStr).slice(-4).map(p=>p.v);
+      if (gg.length < 4) return NaN;
+      const ratio = credit / gg.reduce((a,b)=>a+b,0) * 100;
+      return (ratio>=30 && ratio<=200) ? ratio : NaN;
+    }
+    case "technical": {
+      const h = mk.xlk?.history;
+      if (!h) return NaN;
+      const upto = h.filter(p=>p.d <= dateStr);
+      if (upto.length < 3) return NaN;
+      const last = upto[upto.length-1].v;
+      const cut = new Date(dateStr); cut.setDate(cut.getDate() - 200);
+      const cutStr = cut.toISOString().slice(0,10);
+      const win = upto.filter(p=>p.d >= cutStr);
+      const arr = win.length >= 3 ? win : upto.slice(-8);
+      const ma = arr.reduce((a,p)=>a+p.v,0) / arr.length;
+      if (!(ma > 0)) return NaN;
+      const dev = last/ma - 1;
+      return dev>0.02 ? 1 : dev<-0.02 ? -1 : 0;
+    }
+    default: return NaN;
+  }
+}
+function computeScoreAt(dateStr){
+  let w=0, s=0;
+  for (const key of HIST_SCORE_KEYS){
+    const ind = IND.find(i=>i.key===key);
+    if (!ind || !ind.weight) continue;
+    const v = histIndicatorValue(key, dateStr);
+    if (!Number.isFinite(v)) continue;
+    w += ind.weight; s += LEVEL_PTS[ind.level(v)] * ind.weight;
+  }
+  return w>0 ? s/w : NaN;
+}
+
 function renderAutoCharts(){
   if (!apiData) return;
   const f = apiData.fred || {}, m = apiData.market || {};
@@ -765,9 +835,18 @@ function renderAutoCharts(){
   }
   if (ds.length){
     const labels = ds[0].data.map(p=>p.x);
-    upsert("chIdx", { type:"line",
-      data:{ labels, datasets: ds.map(d=>({ ...d, data:d.data.map(p=>p.y) })) },
-      options: chartBase() });
+    const datasets = ds.map(d=>({ ...d, data:d.data.map(p=>p.y), yAxisID:"y" }));
+    // AI Score 오버레이 (우측 축 0~100 · 자동 지표만 재정규화)
+    const scoreData = labels.map(d => { const v = computeScoreAt(d); return Number.isFinite(v) ? +v.toFixed(1) : null; });
+    if (scoreData.some(v => v !== null)){
+      datasets.push({ label:"AI Score (매크로·우측축)", data:scoreData, yAxisID:"y1",
+        borderColor:cssVar("--txt"), borderWidth:2.2, borderDash:[5,3], pointRadius:0, tension:.2, spanGaps:true });
+    }
+    const opt = chartBase();
+    opt.scales.y1 = { position:"right", min:0, max:100,
+      ticks:{ color:cssVar("--txt"), font:{size:10} }, grid:{ drawOnChartArea:false },
+      title:{ display:true, text:"AI Score", color:cssVar("--txt"), font:{size:10} } };
+    upsert("chIdx", { type:"line", data:{ labels, datasets }, options: opt });
   }
 }
 
@@ -856,20 +935,23 @@ async function fetchViaProxy(url){
   throw lastErr || new Error("모든 프록시 실패");
 }
 
-// FRED 시리즈 정의 (worker.js와 동일 스펙)
+// 과거 스코어 산정 시작일 (주가 차트 오버레이 범위)
+const SCORE_START = "2023-01-01";
+
+// FRED 시리즈 정의 — history:true 및 lookback은 SCORE_START(2023) + YoY 기준연도 커버
 const FRED_SERIES = {
-  us10y:          { id:"DGS10",         type:"level", lookbackMonths:13, history:true,  label:"미국 10년물 국채금리 (%)" },
-  vix:            { id:"VIXCLS",        type:"level", lookbackMonths:13, history:true,  label:"VIX" },
-  corePce:        { id:"PCEPILFE",      type:"yoy",   lookbackMonths:30, history:false, label:"Core PCE YoY (%)" },
+  us10y:          { id:"DGS10",         type:"level", lookbackMonths:48, history:true,  label:"미국 10년물 국채금리 (%)" },
+  vix:            { id:"VIXCLS",        type:"level", lookbackMonths:48, history:true,  label:"VIX" },
+  corePce:        { id:"PCEPILFE",      type:"yoy",   lookbackMonths:60, history:true,  label:"Core PCE YoY (%)" },
   unemployment:   { id:"UNRATE",        type:"level", lookbackMonths:30, history:false, label:"실업률 (%)" },
   yieldCurve:     { id:"T10Y3M",        type:"level", lookbackMonths:13, history:false, label:"10Y-3M 금리차 (%p)" },
-  recessionProb:  { id:"RECPROUSM156N", type:"level", lookbackMonths:18, history:false, label:"경기침체 확률 (%)" },
-  productivity:   { id:"OPHNFB",        type:"yoy",   lookbackMonths:40, history:false, label:"미국 노동생산성 YoY (%)" },
-  usHouseholdDebt:{ id:"HDTGPDUSQ163N", type:"level", lookbackMonths:30, history:false, label:"미국 가계부채/GDP (%)" },
-  krHouseholdDebt:{ id:"HDTGPDKRQ163N", type:"level", lookbackMonths:36, history:false, label:"한국 가계부채/GDP (%)" },
+  recessionProb:  { id:"RECPROUSM156N", type:"level", lookbackMonths:48, history:true,  label:"경기침체 확률 (%)" },
+  productivity:   { id:"OPHNFB",        type:"yoy",   lookbackMonths:60, history:true,  label:"미국 노동생산성 YoY (%)" },
+  usHouseholdDebt:{ id:"HDTGPDUSQ163N", type:"level", lookbackMonths:48, history:true,  label:"미국 가계부채/GDP (%)" },
+  krHouseholdDebt:{ id:"HDTGPDKRQ163N", type:"level", lookbackMonths:48, history:true,  label:"한국 가계부채/GDP (%)" },
   // ↓ corpDebt(한국 기업부채/GDP) 계산용 원자재 — IND 표에는 직접 노출 안 됨(언더스코어 접두)
-  _krNfcCredit:   { id:"CRDQKRANABIS",  type:"level", lookbackMonths:30, history:false, label:"한국 비금융기업 신용 (원 십억)" },
-  _krNominalGdp:  { id:"NGDPSAXDCKRQ",  type:"level", lookbackMonths:30, history:true,  label:"한국 명목 GDP (원, 분기)" },
+  _krNfcCredit:   { id:"CRDQKRANABIS",  type:"level", lookbackMonths:54, history:true,  label:"한국 비금융기업 신용 (원 십억)" },
+  _krNominalGdp:  { id:"NGDPSAXDCKRQ",  type:"level", lookbackMonths:54, history:true,  label:"한국 명목 GDP (원, 분기)" },
 };
 const MARKET_SYMBOLS = {
   xlk:   { symbol:"XLK",   label:"XLK (미국 IT)" },
@@ -881,9 +963,9 @@ const MARKET_SYMBOLS = {
 // ECOS(한국은행) 시리즈 — 인증키 필요
 //   period: D(일)·M(월), item: 항목코드, type: level | yoy(월 지수→전년동월 대비)
 const ECOS_SERIES = {
-  krBaseRate:    { stat:"722Y001", item:"0101000", period:"M", type:"level", lookbackMonths:6,  label:"한국 기준금리 (%)" },
-  krTreasury10y: { stat:"817Y002", item:"010210000", period:"D", type:"level", lookbackDays:20, label:"한국 국고채 10년 (%)" },
-  krCpi:         { stat:"901Y009", item:"0",       period:"M", type:"yoy",   lookbackMonths:15, label:"한국 CPI YoY (%)" },
+  krBaseRate:    { stat:"722Y001", item:"0101000", period:"M", type:"level", lookbackMonths:6,    history:false, label:"한국 기준금리 (%)" },
+  krTreasury10y: { stat:"817Y002", item:"010210000", period:"D", type:"level", lookbackDays:1300, history:true,  label:"한국 국고채 10년 (%)" },
+  krCpi:         { stat:"901Y009", item:"0",       period:"M", type:"yoy",   lookbackMonths:60,   history:true,  label:"한국 CPI YoY (%)" },
 };
 
 async function fetchFredSeries(cfg, fredKey){
@@ -957,7 +1039,7 @@ async function fetchEcosSeries(cfg, ecosKey){
     : dt.toISOString().slice(0,7).replace("-","");
   const s = fmtT(start), e = fmtT(end);
 
-  const url = `https://ecos.bok.or.kr/api/StatisticSearch/${encodeURIComponent(ecosKey)}/json/kr/1/100/` +
+  const url = `https://ecos.bok.or.kr/api/StatisticSearch/${encodeURIComponent(ecosKey)}/json/kr/1/1000/` +
               `${cfg.stat}/${cfg.period}/${s}/${e}/${cfg.item}`;
   const txt = await fetchViaProxy(url);
   const data = JSON.parse(txt);
@@ -982,14 +1064,25 @@ async function fetchEcosSeries(cfg, ecosKey){
     value = latest.value;
   }
 
-  const asOf = latest.time.length === 8
-    ? `${latest.time.slice(0,4)}-${latest.time.slice(4,6)}-${latest.time.slice(6,8)}`
-    : `${latest.time.slice(0,4)}-${latest.time.slice(4,6)}`;
-  return { label:cfg.label, stat:cfg.stat, value:+value.toFixed(2), asOf };
+  const timeToDate = t => t.length === 8
+    ? `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}`
+    : `${t.slice(0,4)}-${t.slice(4,6)}-01`;
+  const asOf = timeToDate(latest.time);
+  const out = { label:cfg.label, stat:cfg.stat, value:+value.toFixed(2), asOf };
+  if (cfg.history){
+    // yoy 지표는 원지수(level)를 저장 → 시점별 YoY는 계산 시 산출
+    const step = Math.max(1, Math.floor(obs.length / 200));
+    out.history = obs.filter((_,i)=> i%step===0 || i===obs.length-1)
+                     .map(o=>({ d:timeToDate(o.time), v:+o.value.toFixed(2) }));
+  }
+  return out;
 }
 
 async function fetchYahooSymbol(cfg){
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cfg.symbol)}?range=1y&interval=1d`;
+  // SCORE_START(2023)부터 현재까지 — 주가 차트+스코어 오버레이 공통 범위
+  const p1 = Math.floor(new Date(SCORE_START).getTime() / 1000);
+  const p2 = Math.floor(Date.now() / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cfg.symbol)}?period1=${p1}&period2=${p2}&interval=1d`;
   const text = await fetchViaProxy(url);
   const data = JSON.parse(text);
   const result = data?.chart?.result?.[0];
@@ -1005,13 +1098,13 @@ async function fetchYahooSymbol(cfg){
   if (!points.length) throw new Error("종가 데이터 없음");
 
   const last = points[points.length-1], first = points[0];
-  const step = Math.max(1, Math.floor(points.length / 52));
+  const step = Math.max(1, Math.floor(points.length / 120));   // ~120포인트(월별 수준)로 다운샘플
   // 200일 이동평균 (원본 일별 종가 기준 · 데이터가 부족하면 있는 만큼)
   const nMa = Math.min(200, points.length);
   const ma200 = points.slice(-nMa).reduce((a,p)=>a+p.v, 0) / nMa;
   return {
     label:cfg.label, symbol:cfg.symbol, price:last.v, asOf:last.d,
-    return1y:+(((last.v/first.v)-1)*100).toFixed(2),
+    returnSinceStart:+(((last.v/first.v)-1)*100).toFixed(2),
     ma200:+ma200.toFixed(2),
     history: points.filter((_,i)=> i%step===0 || i===points.length-1),
   };
