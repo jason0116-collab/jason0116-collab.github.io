@@ -346,7 +346,7 @@
       </div>
       <div class="chart-card">
         <h3>지수 상대 성과 + AI Score</h3>
-        <div class="cap">모두 2023년 1월 = 100 · 점선 = AI Score(매크로 재정규화), 색=원점수 <b style="color:var(--red)">≥90</b> · <b style="color:#FB923C">80~90</b> · <b style="color:var(--yellow)">70~80</b> · <b style="color:var(--blue)">&lt;70</b> · XLK · SOXX · S&P 500 · KOSPI</div>
+        <div class="cap">지수 모두 2023년 1월 = 100 · 점선 = AI Score(매크로 재정규화) · 배경색 = 원점수 구간 <b style="color:var(--red)">≥90</b> · <b style="color:#FB923C">80~90</b> · <b style="color:var(--yellow)">70~80</b> · <b style="color:var(--blue)">&lt;70</b> · XLK · SOXX · S&P 500 · KOSPI</div>
         <div class="chart-box"><canvas id="chIdx"></canvas></div>
       </div>
       <div class="chart-card">
@@ -844,20 +844,39 @@ function renderAutoCharts(){
       const base = scoreRaw.find(v => v !== null);   // 첫 유효값(2023.1) = 100
       scoreData = (base && base > 0) ? scoreRaw.map(v => v === null ? null : +(v/base*100).toFixed(1)) : null;
     } catch(err){ console.warn("[AI Score] 계산 오류:", err); }
+    const chIdxPlugins = [];
     if (scoreData && scoreData.some(v => v !== null)){
-      const scoreBandColor = s => s == null ? cssVar("--faint")
-        : s >= 90 ? cssVar("--red") : s >= 80 ? "#FB923C" : s >= 70 ? cssVar("--yellow") : cssVar("--blue");
-      const lastRaw = [...scoreRaw].reverse().find(v => v !== null);
-      datasets.push({ label:"AI Score (2023.1=100 · 색=원점수)", data:scoreData, yAxisID:"y",
-        borderColor: scoreBandColor(lastRaw), borderWidth:2.6, borderDash:[5,3], pointRadius:0, tension:.2, spanGaps:true,
-        segment:{ borderColor: ctx => { const v = scoreRaw[ctx.p1DataIndex]; return v == null ? undefined : scoreBandColor(v); } } });
+      // 점선 = 지수(형태) · 배경 색상 밴드 = 원점수 구간(레짐)
+      datasets.push({ label:"AI Score (2023.1=100)", data:scoreData, yAxisID:"y",
+        borderColor: cssVar("--txt"), borderWidth:2.2, borderDash:[5,3], pointRadius:0, tension:.2, spanGaps:true });
+      const bandBgColor = s => s == null ? null
+        : s >= 90 ? "rgba(248,113,113,.16)" : s >= 80 ? "rgba(251,146,60,.16)"
+        : s >= 70 ? "rgba(251,191,36,.15)"  : "rgba(91,141,239,.15)";
+      chIdxPlugins.push({
+        id:"scoreBands",
+        beforeDatasetsDraw(chart){
+          const xs = chart.scales.x, area = chart.chartArea;
+          if (!xs || !area || !scoreRaw) return;
+          const g = chart.ctx, n = scoreRaw.length;
+          g.save();
+          for (let i=0;i<n;i++){
+            const c = bandBgColor(scoreRaw[i]); if (!c) continue;
+            let left  = i===0   ? xs.getPixelForValue(0) : (xs.getPixelForValue(i-1)+xs.getPixelForValue(i))/2;
+            let right = i===n-1 ? xs.getPixelForValue(i) : (xs.getPixelForValue(i)+xs.getPixelForValue(i+1))/2;
+            left = Math.max(left, area.left); right = Math.min(right, area.right);
+            if (right <= left) continue;
+            g.fillStyle = c; g.fillRect(left, area.top, right-left, area.bottom-area.top);
+          }
+          g.restore();
+        }
+      });
     } else {
       console.warn("[AI Score] 과거 스코어 미표시 — history 시계열 없음(옛 캐시일 수 있음, '강제 새로고침' 시도).", {
         us10y:(apiData.fred?.us10y?.history||[]).length, vix:(apiData.fred?.vix?.history||[]).length,
         recessionProb:(apiData.fred?.recessionProb?.history||[]).length, corePce:(apiData.fred?.corePce?.history||[]).length,
         xlk:(apiData.market?.xlk?.history||[]).length, labels:(labels||[]).length });
     }
-    upsert("chIdx", { type:"line", data:{ labels, datasets }, options: chartBase() });
+    upsert("chIdx", { type:"line", data:{ labels, datasets }, options: chartBase(), plugins: chIdxPlugins });
   }
 }
 
