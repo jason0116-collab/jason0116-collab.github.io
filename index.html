@@ -346,7 +346,7 @@
       </div>
       <div class="chart-card">
         <h3>지수 상대 성과 + AI Score</h3>
-        <div class="cap">2023년 초 = 100 (좌축) · 점선 = AI Score 매크로 재정규화 0~100 (우축) · XLK · SOXX · S&P 500 · KOSPI</div>
+        <div class="cap">모두 2023년 1월 = 100 · 점선 = AI Score(매크로 재정규화) · XLK · SOXX · S&P 500 · KOSPI</div>
         <div class="chart-box"><canvas id="chIdx"></canvas></div>
       </div>
       <div class="chart-card">
@@ -836,12 +836,15 @@ function renderAutoCharts(){
   if (ds.length){
     const labels = ds[0].data.map(p=>p.x);
     const datasets = ds.map(d=>({ ...d, data:d.data.map(p=>p.y), yAxisID:"y" }));
-    // AI Score 오버레이 (우측 축 0~100 · 자동 지표만 재정규화) — 실패해도 지수 차트는 유지
+    // AI Score 오버레이 — 2023.1 = 100으로 지수화(주가선과 동일 좌축) · 실패해도 지수 차트는 유지
     let scoreData = null;
-    try { scoreData = labels.map(d => { const v = computeScoreAt(d); return Number.isFinite(v) ? +v.toFixed(1) : null; }); }
-    catch(err){ console.warn("[AI Score] 계산 오류:", err); }
+    try {
+      const raw = labels.map(d => { const v = computeScoreAt(d); return Number.isFinite(v) ? v : null; });
+      const base = raw.find(v => v !== null);   // 첫 유효값(2023.1) = 100
+      scoreData = (base && base > 0) ? raw.map(v => v === null ? null : +(v/base*100).toFixed(1)) : null;
+    } catch(err){ console.warn("[AI Score] 계산 오류:", err); }
     if (scoreData && scoreData.some(v => v !== null)){
-      datasets.push({ label:"AI Score (매크로·우측축)", data:scoreData, yAxisID:"y1",
+      datasets.push({ label:"AI Score (2023.1=100)", data:scoreData, yAxisID:"y",
         borderColor:cssVar("--txt"), borderWidth:2.2, borderDash:[5,3], pointRadius:0, tension:.2, spanGaps:true });
     } else {
       console.warn("[AI Score] 과거 스코어 미표시 — history 시계열 없음(옛 캐시일 수 있음, '강제 새로고침' 시도).", {
@@ -849,11 +852,7 @@ function renderAutoCharts(){
         recessionProb:(apiData.fred?.recessionProb?.history||[]).length, corePce:(apiData.fred?.corePce?.history||[]).length,
         xlk:(apiData.market?.xlk?.history||[]).length, labels:(labels||[]).length });
     }
-    const opt = chartBase();
-    opt.scales.y1 = { position:"right", min:0, max:100,
-      ticks:{ color:cssVar("--txt"), font:{size:10} }, grid:{ drawOnChartArea:false },
-      title:{ display:true, text:"AI Score", color:cssVar("--txt"), font:{size:10} } };
-    upsert("chIdx", { type:"line", data:{ labels, datasets }, options: opt });
+    upsert("chIdx", { type:"line", data:{ labels, datasets }, options: chartBase() });
   }
 }
 
